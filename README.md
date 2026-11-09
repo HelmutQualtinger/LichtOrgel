@@ -1,6 +1,6 @@
 # LichtOrgel
 
-![LichtOrgel – psychedelisches Regenbogen-Mandala neben dem Schriftzug](og-image.jpg)
+![LichtOrgel – psychedelisches Regenbogen-Mandala mit funkelnden Diamanten und dem Schriftzug „Lucy in the Sky with Diamonds“](og-image.jpg)
 
 Eine Lichtorgel im Browser: Audio von Mikrofon oder Computer wird in zehn Frequenzbänder zerlegt und in Echtzeit als Animation dargestellt. Die gesamte Anwendung ist eine einzelne Datei (`index.html`) ohne Abhängigkeiten und ohne Build-Schritt.
 
