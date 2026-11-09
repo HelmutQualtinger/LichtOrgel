@@ -1,0 +1,1610 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#10141d">
+  <title>LichtOrgel</title>
+  <meta name="description" content="Musik wird zu Licht – live im Browser. Mikrofon oder Computer-Ton, 14 Effekte, WebGPU.">
+  <!-- Social-Media-Vorschau (absolute URLs, von Facebook, LinkedIn, X & Co. verlangt) -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://helmutqualtinger.github.io/LichtOrgel/">
+  <meta property="og:title" content="LichtOrgel">
+  <meta property="og:description" content="Musik wird zu Licht – live im Browser. Mikrofon oder Computer-Ton, 14 Effekte, WebGPU.">
+  <meta property="og:image" content="https://helmutqualtinger.github.io/LichtOrgel/og-image.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Psychedelisches Regenbogen-Mandala neben dem Schriftzug LichtOrgel">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="LichtOrgel">
+  <meta name="twitter:description" content="Musik wird zu Licht – live im Browser.">
+  <meta name="twitter:image" content="https://helmutqualtinger.github.io/LichtOrgel/og-image.jpg">
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #10141d;
+      color: #eef2f8;
+      font-synthesis: none;
+      text-rendering: optimizeLegibility;
+      --muted: #929cad;
+      --panel: #191f2a;
+      --line: #2b3442;
+      --accent: #76e4c2;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #10141d;
+    }
+
+    main {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      height: 100dvh;
+      padding: 10px;
+    }
+
+    .bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px 14px;
+      padding: 8px 12px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--panel);
+    }
+
+    h1 { margin: 0 6px 0 0; font-size: 1.05rem; letter-spacing: -.03em; }
+
+    .status-wrap { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .status-dot {
+      width: 9px;
+      height: 9px;
+      flex: 0 0 auto;
+      border-radius: 50%;
+      background: #697386;
+    }
+    .status-dot.active { background: var(--accent); box-shadow: 0 0 12px #76e4c288; }
+    #status { color: #d3dae5; font-size: .82rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    button {
+      min-height: 34px;
+      padding: 0 14px;
+      border: 0;
+      border-radius: 9px;
+      background: var(--accent);
+      color: #102019;
+      font: inherit;
+      font-size: .85rem;
+      font-weight: 750;
+      cursor: pointer;
+    }
+    button:hover:not(:disabled) { filter: brightness(1.08); }
+    button:focus-visible, select:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+    button:disabled { cursor: wait; opacity: .65; }
+    button.stop { background: #303948; color: #e8edf5; }
+
+    .pickers { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+    .picker { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: .75rem; }
+    select {
+      min-height: 34px;
+      padding: 0 30px 0 10px;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: #232b38 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23c9d2df' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 10px center;
+      color: #eef2f8;
+      font: inherit;
+      font-size: .85rem;
+      font-weight: 600;
+      appearance: none;
+      cursor: pointer;
+    }
+    .source-select { max-width: 200px; text-overflow: ellipsis; }
+    @media (max-width: 1150px) { .picker > span:first-child { display: none; } }
+    .swatch { width: 18px; height: 18px; border-radius: 5px; flex: 0 0 auto; }
+    .backend { color: var(--muted); font-size: .72rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+    .vis-stage {
+      position: relative;
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+    }
+    #visual, #visual-b, #visual-gpu { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
+    .vis-stage { background: #000; }
+    button.toggle { background: #232b38; color: #c9d2df; border: 1px solid var(--line); }
+    button.toggle[aria-pressed="true"] { background: var(--accent); color: #102019; border-color: transparent; }
+    #visual-gpu[hidden] { display: none; }
+
+    @media (max-width: 640px) {
+      main { padding: 8px; gap: 8px; }
+      .pickers { width: 100%; margin-left: 0; }
+      .source-select { max-width: 170px; }
+      .picker { flex: 1; min-width: 0; }
+      .picker select { flex: 1; min-width: 0; }
+      .picker > span:first-child { display: none; }
+      .backend { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header class="bar">
+      <h1>LichtOrgel</h1>
+      <label class="picker"><span>Quelle</span><select id="source" class="source-select" aria-label="Audioquelle"></select></label>
+      <button id="toggle" type="button" title="Das Audiosignal wird nur lokal im Browser verarbeitet.">Start</button>
+      <div class="status-wrap">
+        <span class="status-dot" id="status-dot" aria-hidden="true"></span>
+        <span id="status" role="status" aria-live="polite">Nicht aktiv</span>
+      </div>
+      <div class="pickers">
+        <button id="auto" class="toggle" type="button" aria-pressed="false" title="Geht der Reihe nach durch alle Animationen (Wechsel alle 20 s auf dem nächsten Bass-Schlag, mit Überblendung) und alle 12 s fließend zum nächsten Farbthema">Auto</button>
+        <label class="picker"><span>Animation</span><select id="mode-switch" aria-label="Animation"></select></label>
+        <label class="picker"><span>Thema</span><span class="swatch" id="theme-swatch" aria-hidden="true"></span><select id="theme-switch" aria-label="Farbthema"></select></label>
+        <span class="backend" id="backend">Canvas 2D</span>
+      </div>
+    </header>
+
+    <div class="vis-stage" id="vis-stage" aria-label="Klangvisualisierung">
+      <canvas id="visual" aria-hidden="true"></canvas>
+      <canvas id="visual-b" aria-hidden="true"></canvas>
+      <canvas id="visual-gpu" aria-hidden="true" hidden></canvas>
+    </div>
+  </main>
+
+  <script>
+    "use strict";
+
+    const bandCount = 10;
+    const minFrequency = 40;
+    const maxFrequency = 16000;
+    const minDb = -90;
+    const maxDb = -30;
+    const toggleButton = document.querySelector("#toggle");
+    const statusText = document.querySelector("#status");
+    const statusDot = document.querySelector("#status-dot");
+    const bands = [];
+    let audioContext;
+    let analyser;
+    let stream;
+    let animationFrame;
+
+    for (let index = 0; index < bandCount; index += 1) {
+      const lower = minFrequency * (maxFrequency / minFrequency) ** (index / bandCount);
+      const upper = minFrequency * (maxFrequency / minFrequency) ** ((index + 1) / bandCount);
+      bands.push({ lower, upper });
+    }
+
+    // ---- Klangvisualisierung: Animationsmodi & Farbthemen ----
+    const themes = {
+      Neon:   { bg: ["#1a0b2e", "#05030a"], colors: ["#00f0ff", "#7a5cff", "#ff2bd6"], core: "#ffffff", glow: 22 },
+      Glut:   { bg: ["#2a0d05", "#080302"], colors: ["#ff2a00", "#ff8a00", "#ffe066"], core: "#fff2c0", glow: 26 },
+      Ozean:  { bg: ["#06243a", "#020a12"], colors: ["#0a4dff", "#00b3c7", "#7dffe0"], core: "#d8fbff", glow: 18 },
+      Aurora: { bg: ["#0b2422", "#03080a"], colors: ["#38ff9c", "#26c6da", "#b46bff"], core: "#e6fff4", glow: 20 },
+      Mono:   { bg: ["#1c1f24", "#08090b"], colors: ["#5d6470", "#b8c0cc", "#ffffff"], core: "#ffffff", glow: 10 }
+    };
+    const visCanvas = document.querySelector("#visual");
+    const themeSwitch = document.querySelector("#theme-switch");
+    const modeSwitch = document.querySelector("#mode-switch");
+    const visLevels = new Array(bandCount).fill(0);
+    const skylinePeaks = new Array(48).fill(0);
+    const rings = [];
+    const particles = [];
+    let timeData;
+    let freqData;
+    let rotation = 0;
+    let phase = 0;
+    let bassAverage = 0;
+    let frame = 0;
+    let lastBeat = 0;
+
+    function loadSetting(key, valid, fallback) {
+      try { const v = localStorage.getItem(key); if (valid(v)) return v; } catch {}
+      return fallback;
+    }
+    function saveSetting(key, value) {
+      try { localStorage.setItem(key, value); } catch {}
+    }
+
+    function hexMix(a, b, t) {
+      const c = [1, 3, 5].map((o) => Math.round(parseInt(a.slice(o, o + 2), 16) * (1 - t) + parseInt(b.slice(o, o + 2), 16) * t));
+      return `rgb(${c.join(",")})`;
+    }
+    function paletteAt(colors, t) {
+      const seg = Math.max(0, Math.min(colors.length - 1.0001, t * (colors.length - 1)));
+      return hexMix(colors[Math.floor(seg)], colors[Math.floor(seg) + 1], seg % 1);
+    }
+    function levelAt(x) {
+      const pos = Math.max(0, Math.min(1, x)) * (bandCount - 1);
+      const i0 = Math.floor(pos);
+      const i1 = Math.min(bandCount - 1, i0 + 1);
+      return visLevels[i0] + (visLevels[i1] - visLevels[i0]) * (pos - i0);
+    }
+    function groupLevel(from, to) {
+      let sum = 0;
+      for (let i = from; i < to; i += 1) sum += visLevels[i];
+      return sum / (to - from);
+    }
+    function fade(ctx, w, h, alpha) {
+      ctx.globalCompositeOperation = "destination-out";
+      ctx.fillStyle = `rgba(0,0,0,${alpha})`;
+      ctx.fillRect(0, 0, w, h);
+      ctx.globalCompositeOperation = "source-over";
+    }
+    function glow(ctx, color, blur) {
+      ctx.strokeStyle = color;
+      ctx.fillStyle = color;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = blur;
+    }
+
+    let fx = {};
+    let flash = 0;
+
+    function rgbAt(colors, t) {
+      const seg = Math.max(0, Math.min(colors.length - 1.0001, t * (colors.length - 1)));
+      const a = colors[Math.floor(seg)];
+      const b = colors[Math.floor(seg) + 1];
+      return [1, 3, 5].map((o) => parseInt(a.slice(o, o + 2), 16) * (1 - (seg % 1)) + parseInt(b.slice(o, o + 2), 16) * (seg % 1));
+    }
+    function newStar(z) {
+      return { x: (Math.random() - 0.5) * 2, y: (Math.random() - 0.5) * 2, z, band: Math.floor(Math.random() * bandCount) };
+    }
+    function makeBolt(x1, y1, x2, y2, depth) {
+      // Mittelpunktverschiebung: jede Halbierung versetzt den Mittelpunkt seitlich
+      let pts = [[x1, y1], [x2, y2]];
+      let offset = Math.hypot(x2 - x1, y2 - y1) * 0.25;
+      for (let d = 0; d < depth; d += 1) {
+        const next = [pts[0]];
+        for (let i = 1; i < pts.length; i += 1) {
+          const [ax, ay] = pts[i - 1];
+          const [bx, by] = pts[i];
+          next.push([(ax + bx) / 2 + (Math.random() - 0.5) * offset, (ay + by) / 2 + (Math.random() - 0.5) * offset * 0.4], pts[i]);
+        }
+        pts = next;
+        offset *= 0.55;
+      }
+      return pts;
+    }
+
+    const modes = {
+      // Radiale Speichen, Bass oben, Höhen unten, spiegelsymmetrisch
+      Kreis(ctx, w, h, t, s) {
+        ctx.clearRect(0, 0, w, h);
+        const spokes = 120;
+        const base = Math.min(w, h) * 0.17;
+        const reach = Math.min(w, h) * 0.3;
+        rotation += 0.002 + s.overall * 0.02;
+        ctx.save();
+        ctx.translate(w / 2, h / 2);
+        ctx.rotate(rotation);
+        ctx.lineCap = "round";
+        ctx.lineWidth = Math.max(2, ((Math.PI * 2 * base) / spokes) * 0.55);
+        const outline = [];
+        const buckets = 12; // Speichen nach Farbe bündeln: 12 Glow-Zeichnungen statt 120
+        const paths = Array.from({ length: buckets }, () => new Path2D());
+        for (let k = 0; k < spokes; k += 1) {
+          const half = k < spokes / 2 ? k / (spokes / 2) : (spokes - k) / (spokes / 2);
+          const angle = (k / spokes) * Math.PI * 2 - Math.PI / 2;
+          const r0 = base * (1 + s.bass * 0.25);
+          const r1 = r0 + 4 + levelAt(half) * reach;
+          const path = paths[Math.min(buckets - 1, Math.floor(half * buckets))];
+          path.moveTo(Math.cos(angle) * r0, Math.sin(angle) * r0);
+          path.lineTo(Math.cos(angle) * r1, Math.sin(angle) * r1);
+          outline.push([Math.cos(angle) * (r1 + 10), Math.sin(angle) * (r1 + 10)]);
+        }
+        paths.forEach((path, b) => {
+          glow(ctx, paletteAt(t.colors, (b + 0.5) / buckets), t.glow);
+          ctx.stroke(path);
+        });
+        ctx.lineWidth = 1.5;
+        ctx.globalAlpha = 0.6;
+        glow(ctx, paletteAt(t.colors, s.overall), t.glow);
+        ctx.beginPath();
+        outline.forEach(([x, y], n) => (n ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+        ctx.closePath();
+        ctx.stroke();
+        ctx.restore();
+        const coreR = base * (0.55 + s.bass * 0.4);
+        const g = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, coreR);
+        g.addColorStop(0, t.core);
+        g.addColorStop(0.35, paletteAt(t.colors, s.bass));
+        g.addColorStop(1, "transparent");
+        ctx.globalAlpha = 0.35 + s.bass * 0.65;
+        ctx.fillStyle = g;
+        ctx.shadowBlur = 0;
+        ctx.beginPath();
+        ctx.arc(w / 2, h / 2, coreR, 0, Math.PI * 2);
+        ctx.fill();
+      },
+
+      // Drei überlagerte Sinuswellen für Bass, Mitten, Höhen mit Nachleuchten
+      Welle(ctx, w, h, t, s) {
+        fade(ctx, w, h, 0.3);
+        phase += 0.03 + s.overall * 0.18;
+        ctx.lineWidth = 2.5;
+        [[0, 3], [3, 7], [7, 10]].forEach(([a, b], g) => {
+          const level = groupLevel(a, b);
+          const amp = h * 0.04 + level * h * 0.38;
+          const cycles = 1 + g * 1.5;
+          glow(ctx, paletteAt(t.colors, g / 2), t.glow);
+          ctx.beginPath();
+          for (let x = 0; x <= w; x += 4) {
+            const p = x / w;
+            const y = h / 2 + Math.sin(p * Math.PI * 2 * cycles + phase * (g + 1) * (g % 2 ? -1 : 1)) * amp * Math.sin(p * Math.PI);
+            x ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+          }
+          ctx.stroke();
+        });
+      },
+
+      // Echte Wellenform des Mikrofons, auf Nulldurchgang getriggert
+      Oszilloskop(ctx, w, h, t, s) {
+        fade(ctx, w, h, 0.45);
+        ctx.lineWidth = 2.5;
+        glow(ctx, paletteAt(t.colors, Math.min(1, s.overall * 1.6)), t.glow);
+        ctx.beginPath();
+        if (!timeData) {
+          ctx.moveTo(0, h / 2);
+          ctx.lineTo(w, h / 2);
+        } else {
+          let start = 0;
+          for (let i = 1; i < timeData.length / 2; i += 1) {
+            if (timeData[i - 1] < 0 && timeData[i] >= 0) { start = i; break; }
+          }
+          const span = Math.floor(timeData.length / 2);
+          let max = 0.02;
+          for (let i = start; i < start + span; i += 1) max = Math.max(max, Math.abs(timeData[i]));
+          const gain = Math.min(20, 0.9 / max);
+          for (let i = 0; i < span; i += 1) {
+            const x = (i / (span - 1)) * w;
+            const y = h / 2 - timeData[start + i] * gain * h * 0.45;
+            i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+          }
+        }
+        ctx.stroke();
+      },
+
+      // Bass-Schläge erzeugen Ringe, die nach außen fliegen; Form folgt dem Spektrum
+      Tunnel(ctx, w, h, t, s) {
+        ctx.clearRect(0, 0, w, h);
+        if (s.beat || (frame % 24 === 0 && s.overall > 0.08)) {
+          rings.push({ r: 0.03, rot: Math.random() * Math.PI, color: paletteAt(t.colors, s.dominant), strong: s.beat });
+        }
+        const maxR = Math.hypot(w, h) / 2;
+        for (let i = rings.length - 1; i >= 0; i -= 1) {
+          const ring = rings[i];
+          ring.r = ring.r * (1.025 + s.overall * 0.05) + 0.002;
+          ring.rot += 0.004;
+          if (ring.r > 1.3) { rings.splice(i, 1); continue; }
+          ctx.globalAlpha = Math.min(1, ring.r * 4) * (1 - ring.r / 1.3);
+          ctx.lineWidth = (ring.strong ? 2 : 1) + ring.r * 6;
+          glow(ctx, ring.color, t.glow);
+          ctx.beginPath();
+          const points = 72;
+          for (let k = 0; k <= points; k += 1) {
+            const half = k < points / 2 ? k / (points / 2) : (points - k) / (points / 2);
+            const angle = (k / points) * Math.PI * 2 + ring.rot;
+            const radius = ring.r * maxR * (1 + levelAt(half) * 0.35);
+            const x = w / 2 + Math.cos(angle) * radius;
+            const y = h / 2 + Math.sin(angle) * radius;
+            k ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+          }
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+      },
+
+      // Partikel in einem Strömungsfeld; jedes Partikel gehört zu einem Band
+      Partikel(ctx, w, h, t, s) {
+        fade(ctx, w, h, 0.12);
+        if (particles.length === 0) {
+          for (let i = 0; i < 320; i += 1) {
+            particles.push({ x: Math.random() * w, y: Math.random() * h, band: i % bandCount });
+          }
+        }
+        phase += 0.004 + s.overall * 0.01;
+        ctx.shadowBlur = 0;
+        for (const p of particles) {
+          const level = visLevels[p.band];
+          const angle = (Math.sin(p.x * 0.004 + phase) + Math.cos(p.y * 0.005 - phase)) * Math.PI;
+          const speed = 0.3 + level * 7;
+          p.x += Math.cos(angle) * speed;
+          p.y += Math.sin(angle) * speed;
+          if (s.beat) {
+            p.x += (p.x - w / 2) * 0.06;
+            p.y += (p.y - h / 2) * 0.06;
+          }
+          if (p.x < 0) p.x += w; else if (p.x > w) p.x -= w;
+          if (p.y < 0) p.y += h; else if (p.y > h) p.y -= h;
+          ctx.globalAlpha = 0.25 + level * 0.75;
+          ctx.fillStyle = paletteAt(t.colors, p.band / (bandCount - 1));
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 1 + level * 3.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      },
+
+      // Laufendes Spektrogramm: Zeit nach links, Frequenz nach oben
+      Wasserfall(ctx, w, h, t) {
+        if (!freqData || !audioContext) { ctx.clearRect(0, 0, w, h); return; }
+        const ratio = ctx.canvas.width / w;
+        const step = 2;
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.globalCompositeOperation = "copy";
+        ctx.drawImage(ctx.canvas, -step * ratio, 0);
+        ctx.restore();
+        ctx.clearRect(w - step, 0, step, h);
+        const binWidth = audioContext.sampleRate / analyser.fftSize;
+        const rowHeight = 3;
+        ctx.shadowBlur = 0;
+        for (let y = 0; y < h; y += rowHeight) {
+          const freq = minFrequency * (maxFrequency / minFrequency) ** (1 - y / h);
+          const db = freqData[Math.min(freqData.length - 1, Math.round(freq / binWidth))];
+          const v = Math.max(0, Math.min(1, (db - minDb) / (maxDb - minDb)));
+          if (v <= 0) continue;
+          ctx.globalAlpha = v;
+          ctx.fillStyle = paletteAt(t.colors, v);
+          ctx.fillRect(w - step, y, step, rowHeight);
+        }
+        ctx.globalAlpha = 1;
+      },
+
+      // Balken über einem Horizont mit Spiegelung und fallenden Spitzen
+      Skyline(ctx, w, h, t) {
+        ctx.clearRect(0, 0, w, h);
+        const n = skylinePeaks.length;
+        const horizon = h * 0.66;
+        const gap = 3;
+        const barW = (w - gap * (n + 1)) / n;
+        ctx.shadowBlur = 0;
+        for (let i = 0; i < n; i += 1) {
+          const v = levelAt(i / (n - 1));
+          skylinePeaks[i] = Math.max(v, skylinePeaks[i] - 0.01);
+          const x = gap + i * (barW + gap);
+          const barH = 3 + v * horizon * 0.92;
+          const color = paletteAt(t.colors, i / (n - 1));
+          const grad = ctx.createLinearGradient(0, horizon - barH, 0, horizon);
+          grad.addColorStop(0, color);
+          grad.addColorStop(1, hexMix(t.bg[1], t.colors[0], 0.5));
+          ctx.globalAlpha = 1;
+          ctx.fillStyle = grad;
+          ctx.fillRect(x, horizon - barH, barW, barH);
+          ctx.globalAlpha = 0.18;
+          ctx.fillStyle = color;
+          ctx.fillRect(x, horizon + 2, barW, barH * 0.45);
+          ctx.globalAlpha = 1;
+          glow(ctx, t.core, t.glow * 0.6);
+          ctx.fillRect(x, horizon - 4 - skylinePeaks[i] * horizon * 0.92, barW, 2);
+          ctx.shadowBlur = 0;
+        }
+      },
+
+      // Rosenkurven: Bass, Mitten und Höhen als drei rotierende Blütenblätter-Lagen
+      "Blüte"(ctx, w, h, t, s) {
+        fade(ctx, w, h, 0.25);
+        rotation += 0.003 + s.overall * 0.03;
+        const R = Math.min(w, h) * 0.46;
+        ctx.globalCompositeOperation = "lighter";
+        [[0, 3, 3], [3, 7, 5], [7, 10, 8]].forEach(([a, b, petals], g) => {
+          const level = groupLevel(a, b);
+          const color = paletteAt(t.colors, g / 2);
+          glow(ctx, color, t.glow);
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          for (let k = 0; k <= 360; k += 2) {
+            const angle = (k * Math.PI) / 180;
+            const r = R * (0.12 + level * 0.88) * (0.55 + 0.45 * Math.cos(petals * angle + rotation * (g % 2 ? -1 : 1) * (g + 1)));
+            const x = w / 2 + Math.cos(angle) * r;
+            const y = h / 2 + Math.sin(angle) * r;
+            k ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+          }
+          ctx.closePath();
+          ctx.globalAlpha = 0.18;
+          ctx.fill();
+          ctx.globalAlpha = 0.9;
+          ctx.stroke();
+        });
+        ctx.globalAlpha = 1;
+        ctx.globalCompositeOperation = "source-over";
+      },
+
+      // Warp-Sternenflug: Tempo folgt der Lautstärke, Bass-Schläge geben Schub
+      Sternflug(ctx, w, h, t, s) {
+        fade(ctx, w, h, 0.4);
+        const stars = (fx.stars ??= Array.from({ length: 420 }, () => newStar(Math.random())));
+        const speed = 0.004 + s.overall * 0.035 + (s.beat ? 0.06 : 0);
+        const scale = Math.max(w, h) * 0.5;
+        ctx.lineCap = "round";
+        for (const star of stars) {
+          const px = w / 2 + (star.x / star.z) * scale;
+          const py = h / 2 + (star.y / star.z) * scale;
+          star.z -= speed * (0.6 + visLevels[star.band]);
+          const x = w / 2 + (star.x / star.z) * scale;
+          const y = h / 2 + (star.y / star.z) * scale;
+          if (star.z < 0.02 || x < -50 || x > w + 50 || y < -50 || y > h + 50) { Object.assign(star, newStar(1)); continue; }
+          ctx.globalAlpha = Math.min(1, (1 - star.z) * 1.4);
+          ctx.strokeStyle = paletteAt(t.colors, star.band / (bandCount - 1));
+          ctx.lineWidth = 0.5 + (1 - star.z) * 3 * (0.5 + visLevels[star.band]);
+          ctx.beginPath();
+          ctx.moveTo(px, py);
+          ctx.lineTo(x, y);
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+      },
+
+      // Spiralgalaxie: Bass im Kern, Höhen in den äußeren Armen
+      Galaxie(ctx, w, h, t, s) {
+        fade(ctx, w, h, 0.28);
+        const stars = (fx.galaxy ??= Array.from({ length: 900 }, (_, i) => {
+          const r = Math.random() ** 0.8;
+          return { r, a: (i % 3) * (Math.PI * 2 / 3) + r * 5 + (Math.random() - 0.5) * 0.7, band: Math.min(bandCount - 1, Math.floor(r * bandCount)) };
+        }));
+        fx.spin = (fx.spin ?? 0) + 0.003 + s.overall * 0.03;
+        const R = Math.min(w, h * 1.6) * 0.48 * (1 + s.bass * 0.12);
+        const core = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, R * 0.35);
+        core.addColorStop(0, t.core);
+        core.addColorStop(0.3, paletteAt(t.colors, 0));
+        core.addColorStop(1, "transparent");
+        ctx.globalCompositeOperation = "lighter";
+        ctx.globalAlpha = 0.15 + s.bass * 0.5;
+        ctx.fillStyle = core;
+        ctx.fillRect(0, 0, w, h);
+        for (const star of stars) {
+          const level = visLevels[star.band];
+          const angle = star.a + fx.spin / (0.3 + star.r);
+          const x = w / 2 + Math.cos(angle) * star.r * R;
+          const y = h / 2 + Math.sin(angle) * star.r * R * 0.5;
+          ctx.globalAlpha = 0.25 + level * 0.75;
+          ctx.fillStyle = paletteAt(t.colors, star.r);
+          ctx.fillRect(x, y, 0.8 + level * 2.6, 0.8 + level * 2.6);
+        }
+        ctx.globalAlpha = 1;
+        ctx.globalCompositeOperation = "source-over";
+      },
+
+      // Kaleidoskop: zwölffach gespiegelte Bandformen
+      Kaleidoskop(ctx, w, h, t, s) {
+        fade(ctx, w, h, 0.18);
+        const segments = 12;
+        const wedge = (Math.PI * 2) / segments;
+        const R = Math.hypot(w, h) * 0.45;
+        phase += 0.01 + s.overall * 0.05;
+        ctx.globalCompositeOperation = "lighter";
+        ctx.translate(w / 2, h / 2);
+        ctx.rotate(phase * 0.2);
+        for (let seg = 0; seg < segments; seg += 1) {
+          ctx.save();
+          ctx.rotate(seg * wedge);
+          if (seg % 2) ctx.scale(1, -1);
+          for (let i = 0; i < bandCount; i += 1) {
+            const level = visLevels[i];
+            if (level < 0.05) continue;
+            const d = ((i + 1) / (bandCount + 1)) * R * (0.6 + s.bass * 0.4);
+            const a = (Math.sin(phase + i * 0.9) * 0.5 + 0.5) * wedge * 0.5;
+            ctx.globalAlpha = 0.2 + level * 0.6;
+            ctx.fillStyle = paletteAt(t.colors, i / (bandCount - 1));
+            ctx.beginPath();
+            ctx.arc(Math.cos(a) * d, Math.sin(a) * d, 1.5 + level * R * 0.07, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.restore();
+        }
+        ctx.globalAlpha = 1;
+        ctx.globalCompositeOperation = "source-over";
+      },
+
+      // Plasma: Interferenz von Sinusfeldern, Frequenzen und Tempo aus dem Spektrum
+      Plasma(ctx, w, h, t, s) {
+        const pw = 160;
+        const ph = Math.max(1, Math.round((pw * h) / w));
+        if (!fx.plasma || fx.plasma.height !== ph) {
+          fx.plasma = Object.assign(document.createElement("canvas"), { width: pw, height: ph });
+          fx.image = fx.plasma.getContext("2d").createImageData(pw, ph);
+        }
+        if (fx.lutTheme !== t.colors.join()) {
+          fx.lut = Array.from({ length: 256 }, (_, i) => rgbAt(t.colors, (Math.sin((i / 255) * Math.PI * 2) + 1) / 2));
+          fx.lutTheme = t.colors.join();
+        }
+        const mid = groupLevel(3, 7);
+        const high = groupLevel(7, 10);
+        fx.p = (fx.p ?? 0) + 0.02 + s.overall * 0.12;
+        const p = fx.p;
+        const data = fx.image.data;
+        const brightness = 0.35 + s.overall * 0.9 + (s.beat ? 0.3 : 0);
+        let o = 0;
+        for (let y = 0; y < ph; y += 1) {
+          for (let x = 0; x < pw; x += 1) {
+            const dx = x - pw / 2;
+            const dy = y - ph / 2;
+            const v = Math.sin(x * (0.04 + s.bass * 0.05) + p)
+              + Math.sin(y * (0.05 + mid * 0.08) - p * 1.3)
+              + Math.sin((x + y) * 0.03 + p * 0.7)
+              + Math.sin(Math.sqrt(dx * dx + dy * dy) * (0.08 + high * 0.15) - p * 2);
+            const c = fx.lut[Math.floor(((v + 4) / 8) * 255)];
+            data[o] = Math.min(255, c[0] * brightness);
+            data[o + 1] = Math.min(255, c[1] * brightness);
+            data[o + 2] = Math.min(255, c[2] * brightness);
+            data[o + 3] = 255;
+            o += 4;
+          }
+        }
+        fx.plasma.getContext("2d").putImageData(fx.image, 0, 0);
+        ctx.imageSmoothingEnabled = true;
+        ctx.drawImage(fx.plasma, 0, 0, w, h);
+      },
+
+      // Retro-Landschaft: Spektrum-Verlauf als 3D-Gitter mit Sonne am Horizont
+      Terrain(ctx, w, h, t, s) {
+        ctx.clearRect(0, 0, w, h);
+        const cols = 41;
+        const rowsMax = 46;
+        const rows = (fx.rows ??= []);
+        rows.unshift(Array.from({ length: cols }, (_, c) => {
+          const u = Math.abs(c / (cols - 1) - 0.5) * 2; // Bass in der Mitte, Höhen außen
+          return levelAt(u) * (0.35 + u * 0.9);
+        }));
+        if (rows.length > rowsMax) rows.pop();
+        const horizon = h * 0.42;
+        const sunR = Math.min(w, h) * (0.16 + s.bass * 0.05);
+        const sun = ctx.createLinearGradient(0, horizon - sunR, 0, horizon);
+        sun.addColorStop(0, t.colors[2]);
+        sun.addColorStop(1, t.colors[0]);
+        ctx.fillStyle = sun;
+        ctx.shadowColor = t.colors[1];
+        ctx.shadowBlur = t.glow * 2;
+        ctx.beginPath();
+        ctx.arc(w / 2, horizon, sunR, Math.PI, 0);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.save();
+        ctx.clip();
+        ctx.globalCompositeOperation = "destination-out";
+        for (let k = 0; k < 6; k += 1) ctx.fillRect(w / 2 - sunR, horizon - sunR * (0.1 + k * 0.13), sunR * 2, 1.5 + k * 0.8);
+        ctx.restore();
+        ctx.fillStyle = t.bg[1];
+        ctx.fillRect(0, horizon, w, h - horizon);
+        for (let j = rows.length - 1; j >= 0; j -= 1) {
+          const z = 1 + j * 0.28;
+          const baseY = horizon + (h - horizon) / z;
+          const spread = (w * 1.6) / z;
+          const pts = rows[j].map((v, c) => [w / 2 + (c / (cols - 1) - 0.5) * spread, baseY - (v * h * 0.55) / z]);
+          ctx.beginPath();
+          pts.forEach(([x, y], n) => (n ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+          ctx.lineTo(pts[cols - 1][0], h);
+          ctx.lineTo(pts[0][0], h);
+          ctx.closePath();
+          ctx.fillStyle = t.bg[1];
+          ctx.fill();
+          ctx.globalAlpha = Math.max(0, 1 - j / rowsMax);
+          ctx.strokeStyle = paletteAt(t.colors, 1 - j / rowsMax);
+          ctx.lineWidth = Math.max(0.6, 2.2 / z);
+          ctx.beginPath();
+          pts.forEach(([x, y], n) => (n ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
+      },
+
+      // Blitze: Bass-Schläge und Höhen-Spitzen schlagen ein
+      Blitze(ctx, w, h, t, s) {
+        fade(ctx, w, h, 0.3);
+        const bolts = (fx.bolts ??= []);
+        const high = groupLevel(7, 10);
+        fx.highAvg = (fx.highAvg ?? 0) + (high - (fx.highAvg ?? 0)) * 0.08;
+        if (s.beat || (high - fx.highAvg > 0.12 && high > 0.3 && frame - (fx.lastHigh ?? 0) > 6)) {
+          fx.lastHigh = frame;
+          const strength = s.beat ? s.bass : high;
+          bolts.push({ path: makeBolt(Math.random() * w, 0, w / 2 + (Math.random() - 0.5) * w * 0.8, h * (0.6 + Math.random() * 0.4), 7), life: 1, strength,
+            color: paletteAt(t.colors, s.beat ? 0.2 : 0.9) });
+          if (Math.random() < 0.5) {
+            const p = bolts[bolts.length - 1].path[Math.floor(bolts[bolts.length - 1].path.length / 2)];
+            bolts.push({ path: makeBolt(p[0], p[1], p[0] + (Math.random() - 0.5) * w * 0.4, p[1] + h * 0.3, 5), life: 0.8, strength: strength * 0.6, color: bolts[bolts.length - 1].color });
+          }
+          ctx.globalAlpha = 0.12 + strength * 0.2;
+          ctx.fillStyle = t.colors[1];
+          ctx.fillRect(0, 0, w, h);
+          ctx.globalAlpha = 1;
+        }
+        ctx.lineJoin = "round";
+        for (let i = bolts.length - 1; i >= 0; i -= 1) {
+          const bolt = bolts[i];
+          bolt.life -= 0.12;
+          if (bolt.life <= 0) { bolts.splice(i, 1); continue; }
+          const trace = () => { ctx.beginPath(); bolt.path.forEach(([x, y], n) => (n ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.stroke(); };
+          ctx.globalAlpha = bolt.life;
+          glow(ctx, bolt.color, t.glow * 1.5);
+          ctx.lineWidth = 2 + bolt.strength * 6;
+          trace();
+          glow(ctx, t.core, 0);
+          ctx.lineWidth = 1 + bolt.strength * 1.5;
+          trace();
+        }
+        ctx.globalAlpha = 1;
+      }
+    };
+
+    // ---- GPU-Beschleunigung: WebGPU → WebGL2 → Canvas 2D ----
+    // Jeder GPU-Modus ist ein Fragment-Shader im GLSL-Teilformat. Für WebGPU wird er per toWGSL()
+    // automatisch nach WGSL übersetzt. Regeln für Shader-Code: Deklarationen immer mit Typ,
+    // if/for immer mit Klammern, kein Ternär-Operator, keine Swizzle-Zuweisung, Floats mit ".0".
+    // Uniforms (u[0..9]):
+    //   u[0] = Auflösung x, y, Zeit, Flash      u[1..3] = Bänder 0–9, Bass, Gesamt
+    //   u[4..6] = Themenfarben rgb + Mitten / Höhen / Puls   u[7] = Kernfarbe rgb + Glow
+    //   u[8] = Hintergrund innen rgb + Drehung   u[9] = Hintergrund außen rgb + Fahrt
+    const shaderLib = `
+float level(int i) { return u[1 + i / 4][i % 4]; }
+float levelAt(float x) {
+  float p = clamp(x, 0.0, 1.0) * 9.0;
+  int i0 = int(floor(p));
+  int i1 = min(i0 + 1, 9);
+  return mix(level(i0), level(i1), p - floor(p));
+}
+vec3 palette(float t) {
+  float s = clamp(t, 0.0, 1.0) * 2.0;
+  vec3 a = mix(u[4].xyz, u[5].xyz, clamp(s, 0.0, 1.0));
+  return mix(a, u[6].xyz, clamp(s - 1.0, 0.0, 1.0));
+}
+vec3 background(vec2 p) { return mix(u[8].xyz, u[9].xyz, clamp(length(p) * 1.3, 0.0, 1.0)); }
+float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+`;
+
+    const gpuShaders = {
+      Kreis: `
+vec4 shade(vec2 fc) {
+  vec2 res = u[0].xy;
+  vec2 p = (fc - res * 0.5) / min(res.x, res.y);
+  float r = length(p);
+  float a01 = fmod((atan2(p.x, -p.y) - u[8].w) / 6.2831853, 1.0);
+  float n = 120.0;
+  float cell = a01 * n;
+  float kc = (floor(cell) + 0.5) / n;
+  float hm = 1.0 - abs(kc * 2.0 - 1.0);
+  float lv = levelAt(hm);
+  float bass = u[3].z;
+  float r0 = 0.17 * (1.0 + bass * 0.25);
+  float r1 = r0 + 0.008 + lv * 0.3;
+  float across = abs(fract(cell) - 0.5) * 6.2831853 * r / n;
+  float along = max(max(r0 - r, r - r1), 0.0);
+  float d = length(vec2(across, along));
+  float body = 1.0 - smoothstep(0.0018, 0.0036, d);
+  float halo = exp(-d * 60.0) * 0.7 * u[7].w;
+  float outline = exp(-abs(r - r1 - 0.03) * 400.0) * 0.35;
+  vec3 col = background(p) + palette(hm) * (body + halo) + palette(u[3].w) * outline;
+  float coreR = r0 * (0.55 + bass * 0.4);
+  float cg = max(1.0 - r / coreR, 0.0);
+  col = col + mix(palette(bass), u[7].xyz, cg) * cg * (0.35 + bass * 0.65);
+  return vec4(col, 1.0);
+}`,
+      Tunnel: `
+vec4 shade(vec2 fc) {
+  vec2 res = u[0].xy;
+  vec2 p = (fc - res * 0.5) / min(res.x, res.y);
+  float r = max(length(p), 0.001);
+  float a01 = fmod((atan2(p.y, p.x) + u[8].w) / 6.2831853, 1.0);
+  float hm = 1.0 - abs(a01 * 2.0 - 1.0);
+  float lv = levelAt(hm);
+  float depth = 0.35 / r + u[9].w;
+  float rings = pow(max(sin(depth * 6.2831853), 0.0), 16.0);
+  float lines = pow(max(cos(a01 * 6.2831853 * 12.0), 0.0), 40.0) * 0.3;
+  float fog = smoothstep(0.0, 0.45, r);
+  vec3 tint = palette(fract(floor(depth) * 0.137 + hm * 0.3));
+  vec3 col = background(p) + tint * (rings * (0.35 + lv * 2.6) + lines * (0.3 + lv)) * fog * (1.0 + u[6].w * 0.6);
+  col = col + palette(0.0) * u[3].z * exp(-r * 8.0) * 0.9;
+  return vec4(col, 1.0);
+}`,
+      // Mehrstufiges Kaleidoskop: 10-fache Spiegelung, dann 7 Faltungen (Spiegeln, Verschieben,
+      // Drehen, Skalieren). Jede Faltungsstufe hängt an einem eigenen Frequenzband.
+      Kaleidoskop: `
+vec2 rot2(vec2 v, float a) {
+  float c = cos(a);
+  float s = sin(a);
+  return vec2(v.x * c - v.y * s, v.x * s + v.y * c);
+}
+vec4 shade(vec2 fc) {
+  vec2 res = u[0].xy;
+  vec2 p = (fc - res * 0.5) / min(res.x, res.y);
+  float r0 = length(p);
+  float bass = u[3].z;
+  float high = u[5].w;
+  float tme = u[9].w;
+  float spin = u[8].w;
+  float wedge = 6.2831853 / 10.0;
+  float a = fmod(atan2(p.y, p.x) + spin * 0.25, wedge * 2.0);
+  if (a > wedge) { a = wedge * 2.0 - a; }
+  vec2 q = vec2(cos(a), sin(a)) * r0 * (1.6 + 0.3 * sin(tme * 0.15) - bass * 0.35);
+  vec3 col = background(p) * 0.8;
+  float k = 1.0;
+  float trap = 10.0;
+  float sparkle = 0.0;
+  for (int i = 0; i < 7; i++) {
+    float lv = level(min(i + 2, 9));
+    q = abs(q) - vec2(0.42 + 0.08 * sin(tme * 0.21 + float(i) * 1.3), 0.3 + 0.12 * cos(tme * 0.17 + float(i)));
+    q = rot2(q, spin * 0.4 + float(i) * 0.6 + lv * 0.8);
+    float sc = 1.32 + level(i) * 0.25;
+    q = q * sc;
+    k = k * sc;
+    trap = min(trap, length(q) / k);
+    float fadeI = 1.0 - float(i) / 8.0;
+    vec3 tint = palette(fract(float(i) * 0.37 + tme * 0.04 + r0 * 0.6) * 0.9 + 0.05);
+    float dLine = abs(q.y) / k;
+    float dRing = abs(length(q) - 0.25 - lv * 0.25) / k;
+    col = col + tint * fadeI * (exp(-dLine * 900.0) * (0.03 + lv * 0.8) + exp(-dLine * 120.0) * lv * lv * 0.12
+      + exp(-dRing * 600.0) * (0.04 + lv * lv * 1.6));
+    vec2 cell = q * 5.0;
+    sparkle = sparkle + step(0.97, hash(floor(cell) + float(i))) * exp(-length(fract(cell) - 0.5) * 9.0);
+  }
+  col = col + palette(0.5 + 0.5 * sin(trap * 18.0 + tme * 0.3)) * exp(-trap * 30.0) * (0.08 + u[3].w * 0.6);
+  col = col + u[7].xyz * sparkle * high * 1.6;
+  col = col + mix(palette(0.0), u[7].xyz, 0.5) * exp(-r0 * 9.0) * bass * 1.2;
+  col = col * (1.0 - smoothstep(0.25, 1.1, r0) * 0.55) * (1.0 + u[6].w * 0.4);
+  col = 1.0 - exp(-col * 1.2);
+  return vec4(col, 1.0);
+}`,
+      Plasma: `
+vec4 shade(vec2 fc) {
+  vec2 res = u[0].xy;
+  float x = fc.x / res.x * 160.0;
+  float y = fc.y / res.x * 160.0;
+  float dx = x - 80.0;
+  float dy = y - res.y / res.x * 80.0;
+  float ph = u[9].w;
+  float v = sin(x * (0.04 + u[3].z * 0.05) + ph)
+    + sin(y * (0.05 + u[4].w * 0.08) - ph * 1.3)
+    + sin((x + y) * 0.03 + ph * 0.7)
+    + sin(sqrt(dx * dx + dy * dy) * (0.08 + u[5].w * 0.15) - ph * 2.0);
+  float t = (sin((v + 4.0) / 8.0 * 6.2831853) + 1.0) * 0.5;
+  return vec4(palette(t) * (0.35 + u[3].w * 0.9 + u[6].w * 0.3), 1.0);
+}`,
+      Galaxie: `
+vec4 shade(vec2 fc) {
+  vec2 res = u[0].xy;
+  vec2 p = (fc - res * 0.5) / min(res.x, res.y);
+  vec2 g = vec2(p.x, p.y * 2.0) / (0.95 * (1.0 + u[3].z * 0.12));
+  float r = length(g);
+  float spin = atan2(g.y, g.x) + u[8].w / (0.3 + r);
+  float arm = pow(max(cos(3.0 * (spin - log(r + 0.02) * 1.8)), 0.0), 4.0);
+  float lv = levelAt(r);
+  float disk = exp(-r * 2.2);
+  vec2 sp = vec2(fmod(spin / 6.2831853, 1.0) * 240.0, r * 80.0);
+  float h = hash(floor(sp));
+  float star = step(0.55, h) * (1.0 - smoothstep(0.05, 0.22 + lv * 0.25, length(fract(sp) - 0.5)));
+  vec3 col = background(p) + palette(r) * (arm * disk * (0.25 + lv * 1.2) + star * (0.15 + arm) * (0.3 + lv * 1.8) * disk);
+  col = col + mix(palette(0.0), u[7].xyz, exp(-r * 10.0)) * exp(-r * 5.0) * (0.2 + u[3].z * 0.9);
+  return vec4(col, 1.0);
+}`
+    };
+
+    const glslTypes = { float: "f32", int: "i32", vec2: "vec2f", vec3: "vec3f", vec4: "vec4f" };
+    function toWGSL(src) {
+      return src
+        .replace(/\b(float|int|vec[234])\s+(\w+)\s*\(([^)]*)\)\s*\{/g, (_, ret, name, params) => {
+          const args = params.split(",").filter((p) => p.trim()).map((p) => {
+            const [type, arg] = p.trim().split(/\s+/);
+            return `${arg}: ${glslTypes[type]}`;
+          });
+          return `fn ${name}(${args.join(", ")}) -> ${glslTypes[ret]} {`;
+        })
+        .replace(/\b(float|int|vec[234])\s+(\w+)\s*=/g, (_, type, name) => `var ${name}: ${glslTypes[type]} =`)
+        .replace(/\bvec([234])\(/g, "vec$1f(")
+        .replace(/\bfloat\(/g, "f32(")
+        .replace(/\bint\(/g, "i32(")
+        .replace(/\bu\[/g, "uu.v[");
+    }
+
+    const wgslHead = `
+struct U { v: array<vec4f, 10> };
+@group(0) @binding(0) var<uniform> uu: U;
+fn fmod(a: f32, b: f32) -> f32 { return a - b * floor(a / b); }
+@vertex fn vs(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {
+  var pts = array<vec2f, 3>(vec2f(-1.0, -1.0), vec2f(3.0, -1.0), vec2f(-1.0, 3.0));
+  return vec4f(pts[i], 0.0, 1.0);
+}`;
+    const wgslTail = `
+@fragment fn fs(@builtin(position) pos: vec4f) -> @location(0) vec4f { return shade(pos.xy); }`;
+    const glslVertex = `#version 300 es
+void main() {
+  gl_Position = vec4(gl_VertexID == 1 ? 3.0 : -1.0, gl_VertexID == 2 ? 3.0 : -1.0, 0.0, 1.0);
+}`;
+    const glslHead = `#version 300 es
+precision highp float;
+uniform vec4 u[10];
+out vec4 outColor;
+float fmod(float a, float b) { return a - b * floor(a / b); }
+float atan2(float y, float x) { return atan(y, x); }
+`;
+    const glslTail = `
+void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }`;
+
+    const visStage = document.querySelector("#vis-stage");
+    const backendLabel = document.querySelector("#backend");
+    let gpuCanvas = document.querySelector("#visual-gpu");
+    const gpuUniforms = new Float32Array(40);
+    const gpuState = { rot: 0, travel: 0, pulse: 0, start: performance.now() };
+    let gpu = null;
+    let gpuActive = false;
+    let fpsFrames = 0;
+    let fpsSince = performance.now();
+
+    function freshGpuCanvas() {
+      // Ein Canvas behält seinen ersten Kontexttyp; nach einem Fehlversuch braucht es ein neues.
+      const next = gpuCanvas.cloneNode();
+      gpuCanvas.replaceWith(next);
+      gpuCanvas = next;
+    }
+
+    async function initWebGPU(isCancelled) {
+      if (!navigator.gpu) return null;
+      const adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
+      if (!adapter) return null;
+      const device = await adapter.requestDevice();
+      const format = navigator.gpu.getPreferredCanvasFormat();
+      const layout = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: GPUShaderStage.FRAGMENT, buffer: {} }] });
+      const pipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [layout] });
+      const pipelines = {};
+      const blendPipelines = {};
+      for (const [name, src] of Object.entries(gpuShaders)) {
+        const module = device.createShaderModule({ code: wgslHead + toWGSL(shaderLib + src) + wgslTail });
+        const info = await module.getCompilationInfo();
+        const errors = info.messages.filter((m) => m.type === "error");
+        if (errors.length) throw new Error(`${name}: ${errors.map((m) => `${m.lineNum}: ${m.message}`).join("; ")}`);
+        pipelines[name] = await device.createRenderPipelineAsync({
+          layout: pipelineLayout,
+          vertex: { module, entryPoint: "vs" },
+          fragment: { module, entryPoint: "fs", targets: [{ format }] },
+          primitive: { topology: "triangle-list" }
+        });
+        // Zweite Variante mit Blend-Konstante für Überblendungen; wird im Hintergrund gebaut
+        void device.createRenderPipelineAsync({
+          layout: pipelineLayout,
+          vertex: { module, entryPoint: "vs" },
+          fragment: { module, entryPoint: "fs", targets: [{ format, blend: {
+            color: { srcFactor: "constant", dstFactor: "one-minus-constant", operation: "add" },
+            alpha: { srcFactor: "one", dstFactor: "zero", operation: "add" }
+          } }] },
+          primitive: { topology: "triangle-list" }
+        }).then((pipeline) => { blendPipelines[name] = pipeline; }, (error) => console.warn("Blend-Pipeline:", error));
+      }
+      const buffer = device.createBuffer({ size: gpuUniforms.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+      const bindGroup = device.createBindGroup({ layout, entries: [{ binding: 0, resource: { buffer } }] });
+      if (isCancelled()) { device.destroy(); return null; }
+      const context = gpuCanvas.getContext("webgpu");
+      context.configure({ device, format, alphaMode: "opaque" });
+      device.lost.then((reason) => {
+        console.warn("WebGPU-Gerät verloren:", reason.message);
+        if (gpu?.kind === "WebGPU") { gpu = null; void initGpu("webgl"); }
+      });
+      return {
+        kind: "WebGPU",
+        // name deckend zeichnen; optional next mit Anteil mix darüberblenden
+        render(name, next, mix) {
+          device.queue.writeBuffer(buffer, 0, gpuUniforms);
+          const encoder = device.createCommandEncoder();
+          const pass = encoder.beginRenderPass({
+            colorAttachments: [{ view: context.getCurrentTexture().createView(), loadOp: "clear", storeOp: "store", clearValue: { r: 0, g: 0, b: 0, a: 1 } }]
+          });
+          pass.setBindGroup(0, bindGroup);
+          if (next && !blendPipelines[next]) {
+            pass.setPipeline(pipelines[mix < 0.5 ? name : next]);
+            pass.draw(3);
+          } else {
+            pass.setPipeline(pipelines[name]);
+            pass.draw(3);
+            if (next) {
+              pass.setPipeline(blendPipelines[next]);
+              pass.setBlendConstant({ r: mix, g: mix, b: mix, a: mix });
+              pass.draw(3);
+            }
+          }
+          pass.end();
+          device.queue.submit([encoder.finish()]);
+        }
+      };
+    }
+
+    function initWebGL() {
+      const gl = gpuCanvas.getContext("webgl2", { alpha: false, antialias: false, powerPreference: "high-performance" });
+      if (!gl) return null;
+      const compile = (type, src) => {
+        const shader = gl.createShader(type);
+        gl.shaderSource(shader, src);
+        gl.compileShader(shader);
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(shader));
+        return shader;
+      };
+      const vertex = compile(gl.VERTEX_SHADER, glslVertex);
+      const programs = {};
+      for (const [name, src] of Object.entries(gpuShaders)) {
+        const program = gl.createProgram();
+        gl.attachShader(program, vertex);
+        gl.attachShader(program, compile(gl.FRAGMENT_SHADER, glslHead + shaderLib + src + glslTail));
+        gl.linkProgram(program);
+        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error(`${name}: ${gl.getProgramInfoLog(program)}`);
+        programs[name] = { program, location: gl.getUniformLocation(program, "u") };
+      }
+      gl.bindVertexArray(gl.createVertexArray());
+      return {
+        kind: "WebGL2",
+        render(name, next, mix) {
+          const draw = (key) => {
+            const { program, location } = programs[key];
+            gl.useProgram(program);
+            gl.uniform4fv(location, gpuUniforms);
+            gl.drawArrays(gl.TRIANGLES, 0, 3);
+          };
+          gl.viewport(0, 0, gpuCanvas.width, gpuCanvas.height);
+          draw(name);
+          if (next) {
+            gl.enable(gl.BLEND);
+            gl.blendColor(mix, mix, mix, mix);
+            gl.blendFunc(gl.CONSTANT_ALPHA, gl.ONE_MINUS_CONSTANT_ALPHA);
+            draw(next);
+            gl.disable(gl.BLEND);
+          }
+        }
+      };
+    }
+
+    async function initGpu(force) {
+      // ?gpu=webgpu | webgl | off erzwingt ein Backend (zum Testen und Vergleichen)
+      const want = force ?? new URLSearchParams(location.search).get("gpu");
+      gpu = null;
+      if (want !== "off" && want !== "webgl") {
+        // Hängt die WebGPU-Initialisierung (Treiberprobleme), nach 4 s auf WebGL2 ausweichen
+        let cancelled = false;
+        const timeout = new Promise((resolve) => setTimeout(() => { cancelled = true; resolve(null); }, 4000));
+        try {
+          gpu = await Promise.race([initWebGPU(() => cancelled), timeout]);
+          if (!gpu && cancelled) console.warn("WebGPU-Initialisierung zu langsam, nutze WebGL2");
+        } catch (error) {
+          console.warn("WebGPU nicht nutzbar:", error);
+          freshGpuCanvas();
+        }
+      }
+      if (!gpu && want !== "off") {
+        try { gpu = initWebGL(); } catch (error) { console.warn("WebGL2 nicht nutzbar:", error); freshGpuCanvas(); gpu = null; }
+      }
+      for (const o of modeSwitch.options) o.textContent = o.value + (gpu && gpuShaders[o.value] ? " · GPU" : "");
+      resizeVisual();
+    }
+
+    function hexRgb(hex) {
+      return [1, 3, 5].map((o) => parseInt(hex.slice(o, o + 2), 16) / 255);
+    }
+
+    function renderGpu(t, s, name, next, mix) {
+      gpuState.rot += 0.002 + s.overall * 0.02;
+      gpuState.travel += 0.01 + s.overall * 0.06 + (s.beat ? 0.15 : 0);
+      gpuState.pulse = s.beat ? 1 : gpuState.pulse * 0.85;
+      const U = gpuUniforms;
+      U.set([gpuCanvas.width, gpuCanvas.height, (performance.now() - gpuState.start) / 1000, flash], 0);
+      U.set(visLevels, 4);
+      U[14] = s.bass;
+      U[15] = s.overall;
+      U.set([...hexRgb(t.colors[0]), groupLevel(3, 7)], 16);
+      U.set([...hexRgb(t.colors[1]), groupLevel(7, 10)], 20);
+      U.set([...hexRgb(t.colors[2]), gpuState.pulse], 24);
+      U.set([...hexRgb(t.core), t.glow / 20], 28);
+      U.set([...hexRgb(t.bg[0]), gpuState.rot], 32);
+      U.set([...hexRgb(t.bg[1]), gpuState.travel], 36);
+      gpu.render(name, next, mix);
+    }
+
+    function updateBackendLabel(now) {
+      fpsFrames += 1;
+      if (now - fpsSince < 500 && fpsFrames > 1) return;
+      const fps = analyser ? ` · ${Math.round((fpsFrames * 1000) / Math.max(1, now - fpsSince))} fps` : "";
+      backendLabel.textContent = (gpuActive ? gpu.kind : "Canvas 2D") + fps;
+      fpsFrames = 0;
+      fpsSince = now;
+    }
+
+    let themeName = loadSetting("lichtorgel-theme", (v) => v in themes, "Neon");
+    let modeName = loadSetting("lichtorgel-mode", (v) => v in modes, "Kreis");
+
+    function makeSwitch(select, names, onPick) {
+      for (const name of names) select.add(new Option(name, name));
+      select.addEventListener("change", () => onPick(select.value));
+    }
+    function markPressed(select, name) {
+      select.value = name;
+    }
+
+    // ---- Auto-Modus: wechselt Animation (im Takt, mit Abblende) und Farbthema (fließend) ----
+    const autoModeMs = 20000;
+    const autoThemeMs = 12000;
+    const themeBlendMs = 4000;
+    const modeBlendMs = 2500;
+    const autoButton = document.querySelector("#auto");
+    let autoOn = loadSetting("lichtorgel-auto", (v) => v === "1" || v === "0", "0") === "1";
+    let autoNextMode = 0;
+    let autoNextTheme = 0;
+    let themeBlend = null;
+
+    function mixHex(a, b, t) {
+      return "#" + [1, 3, 5].map((o) => Math.round(parseInt(a.slice(o, o + 2), 16) * (1 - t) + parseInt(b.slice(o, o + 2), 16) * t)
+        .toString(16).padStart(2, "0")).join("");
+    }
+
+    // Aktuelles Thema, während einer Überblendung als Mischung aus altem und neuem Thema
+    function currentTheme() {
+      const to = themes[themeName];
+      if (!themeBlend) return to;
+      const k = (performance.now() - themeBlend.start) / themeBlendMs;
+      if (k >= 1) { themeBlend = null; return to; }
+      const e = k * k * (3 - 2 * k);
+      const from = themeBlend.from;
+      return {
+        bg: to.bg.map((c, i) => mixHex(from.bg[i], c, e)),
+        colors: to.colors.map((c, i) => mixHex(from.colors[i], c, e)),
+        core: mixHex(from.core, to.core, e),
+        glow: from.glow + (to.glow - from.glow) * e
+      };
+    }
+
+    function setCanvasBackground(t) {
+      visStage.style.background = `radial-gradient(circle at 50% 50%, ${t.bg[0]} 0, ${t.bg[1]} 75%)`;
+    }
+
+    function blendToTheme(name) {
+      if (name === themeName) return;
+      // Ohne laufendes Audio gibt es keine Frames, die überblenden könnten → direkt umschalten
+      themeBlend = analyser ? { from: currentTheme(), start: performance.now() } : null;
+      applyTheme(name);
+    }
+
+    function nextName(names, current) {
+      return names[(names.indexOf(current) + 1) % names.length];
+    }
+
+    function setAuto(on) {
+      autoOn = on;
+      autoNextMode = 0;
+      autoButton.setAttribute("aria-pressed", String(on));
+      saveSetting("lichtorgel-auto", on ? "1" : "0");
+    }
+
+    function autoStep(now, beat) {
+      if (!autoOn || !analyser) return;
+      if (!autoNextMode) {
+        autoNextMode = now + autoModeMs;
+        autoNextTheme = now + autoThemeMs;
+      }
+      // Nächste Animation auf dem nächsten Bass-Schlag, spätestens 3 s nach Fälligkeit
+      if (!modeTransition && now >= autoNextMode && (beat || now >= autoNextMode + 3000)) {
+        autoNextMode = now + autoModeMs;
+        transitionTo(nextName(Object.keys(modes), modeName));
+      }
+      if (now >= autoNextTheme) {
+        autoNextTheme = now + autoThemeMs;
+        blendToTheme(nextName(Object.keys(themes), themeName));
+      }
+    }
+
+    autoButton.addEventListener("click", () => setAuto(!autoOn));
+    setAuto(autoOn);
+
+    function applyTheme(name) {
+      themeName = name;
+      const t = themes[name];
+      setCanvasBackground(currentTheme());
+      markPressed(themeSwitch, name);
+      document.querySelector("#theme-swatch").style.background = `linear-gradient(135deg, ${t.colors.join(", ")})`;
+      saveSetting("lichtorgel-theme", name);
+      if (!analyser) drawVisual();
+    }
+    // ---- Effektwechsel mit Überblendung ----
+    // Während eines Wechsels laufen alter und neuer Effekt gleichzeitig:
+    //   2D + 2D: zwei Canvas-Ebenen, Deckkraft gegenläufig
+    //   GPU + GPU: ein Renderdurchgang, der neue Effekt per Blend-Konstante darüber
+    //   GPU + 2D: GPU-Canvas liegt oben, seine Deckkraft trägt die Überblendung
+    const layers = [visCanvas, document.querySelector("#visual-b")]
+      .map((canvas) => ({ canvas, ctx: canvas.getContext("2d"), mode: null }));
+    const fxStore = {};
+    let modeTransition = null;
+
+    function resetModeState(name) {
+      fxStore[name] = {};
+      if (name === "Tunnel") rings.length = 0;
+      if (name === "Partikel") particles.length = 0;
+      for (const layer of layers) {
+        if (layer.mode === name) {
+          layer.mode = null;
+          layer.ctx.clearRect(0, 0, layer.canvas.clientWidth, layer.canvas.clientHeight);
+        }
+      }
+    }
+
+    function selectMode(name) {
+      modeName = name;
+      markPressed(modeSwitch, name);
+      saveSetting("lichtorgel-mode", name);
+    }
+
+    function applyMode(name) {
+      modeTransition = null;
+      resetModeState(name);
+      selectMode(name);
+      if (!analyser) drawVisual();
+    }
+
+    function transitionTo(name) {
+      if (name === modeName && !modeTransition) return;
+      if (!analyser) { applyMode(name); return; }
+      resetModeState(name);
+      modeTransition = { from: modeName, start: performance.now() };
+      selectMode(name);
+    }
+
+    function renderModes(active, weights, theme, state, live) {
+      const w = visCanvas.clientWidth;
+      const h = visCanvas.clientHeight;
+      const onGpu = active.map((m) => Boolean(gpu && gpuShaders[m]));
+      const gpuModes = active.filter((m, i) => onGpu[i]);
+      const cpuModes = active.filter((m, i) => !onGpu[i]);
+
+      gpuActive = gpuModes.length > 0;
+      gpuCanvas.hidden = !gpuActive;
+      if (gpuModes.length === 2) {
+        gpuCanvas.style.opacity = "1";
+        renderGpu(theme, state, gpuModes[0], gpuModes[1], weights[1]);
+      } else if (gpuModes.length === 1) {
+        gpuCanvas.style.opacity = String(cpuModes.length ? weights[active.indexOf(gpuModes[0])] : 1);
+        renderGpu(theme, state, gpuModes[0]);
+      }
+
+      for (const layer of layers) {
+        if (layer.mode && !cpuModes.includes(layer.mode)) {
+          layer.ctx.clearRect(0, 0, w, h);
+          layer.mode = null;
+        }
+        if (!layer.mode) layer.canvas.style.opacity = "0";
+      }
+      for (const m of cpuModes) {
+        let layer = layers.find((l) => l.mode === m);
+        if (!layer) {
+          layer = layers.find((l) => !l.mode);
+          layer.mode = m;
+          layer.ctx.clearRect(0, 0, w, h);
+        }
+        // Liegt ein GPU-Effekt darüber, trägt dessen Deckkraft die Überblendung
+        layer.canvas.style.opacity = String(gpuModes.length ? 1 : weights[active.indexOf(m)]);
+        if (!live) layer.ctx.clearRect(0, 0, w, h);
+        fx = fxStore[m] ??= {};
+        layer.ctx.save();
+        modes[m](layer.ctx, w, h, theme, state);
+        layer.ctx.restore();
+      }
+    }
+
+    // Manuelle Wahl setzt den Auto-Zeitplan zurück; auch sie wird überblendet
+    makeSwitch(modeSwitch, Object.keys(modes), (name) => { autoNextMode = 0; transitionTo(name); });
+    makeSwitch(themeSwitch, Object.keys(themes), (name) => { autoNextMode = 0; blendToTheme(name); });
+
+    function resizeVisual() {
+      const ratio = window.devicePixelRatio || 1;
+      for (const { canvas, ctx } of layers) {
+        canvas.width = Math.round(canvas.clientWidth * ratio);
+        canvas.height = Math.round(canvas.clientHeight * ratio);
+        ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+      }
+      const gpuRatio = Math.min(ratio, 2);
+      gpuCanvas.width = Math.round(visCanvas.clientWidth * gpuRatio);
+      gpuCanvas.height = Math.round(visCanvas.clientHeight * gpuRatio);
+      particles.length = 0;
+      if (!analyser) drawVisual();
+    }
+    new ResizeObserver(() => resizeVisual()).observe(visStage);
+
+    function drawVisual(levels) {
+      const w = visCanvas.clientWidth;
+      const h = visCanvas.clientHeight;
+      frame += 1;
+      for (let i = 0; i < bandCount; i += 1) {
+        const target = levels ? (levels[i] - minDb) / (maxDb - minDb) : 0;
+        visLevels[i] += (target - visLevels[i]) * (target > visLevels[i] ? 1 : 0.25);
+      }
+      if (analyser) {
+        if (!timeData || timeData.length !== analyser.fftSize) timeData = new Float32Array(analyser.fftSize);
+        if (!freqData || freqData.length !== analyser.frequencyBinCount) freqData = new Float32Array(analyser.frequencyBinCount);
+        analyser.getFloatTimeDomainData(timeData);
+        analyser.getFloatFrequencyData(freqData);
+      } else {
+        timeData = undefined;
+        freqData = undefined;
+      }
+      const bass = groupLevel(0, 3);
+      const overall = groupLevel(0, bandCount);
+      let dominant = 0;
+      for (let i = 1; i < bandCount; i += 1) if (visLevels[i] > visLevels[dominant]) dominant = i;
+      const beat = bass - bassAverage > 0.1 && bass > 0.25 && frame - lastBeat > 8;
+      if (beat) lastBeat = frame;
+      bassAverage += (bass - bassAverage) * 0.06;
+
+      flash = beat ? 1 : flash * 0.82;
+      autoStep(performance.now(), beat);
+      const blending = Boolean(themeBlend);
+      const theme = currentTheme();
+      if (blending) setCanvasBackground(theme);
+      const state = { bass, overall, beat, dominant: dominant / (bandCount - 1) };
+      const active = [modeName];
+      const weights = [1];
+      if (modeTransition) {
+        const p = Math.min(1, (performance.now() - modeTransition.start) / modeBlendMs);
+        if (p >= 1) {
+          modeTransition = null;
+        } else {
+          const k = p * p * (3 - 2 * p);
+          active.unshift(modeTransition.from);
+          weights.splice(0, 1, 1 - k, k);
+        }
+      }
+      renderModes(active, weights, theme, state, Boolean(levels));
+      updateBackendLabel(performance.now());
+
+      // Bass-Schlag: kurzes Aufhellen der ganzen Fläche
+      visStage.style.filter = flash > 0.03 ? `brightness(${1 + flash * 0.45}) saturate(${1 + flash * 0.3})` : "";
+    }
+
+    markPressed(modeSwitch, modeName);
+    applyTheme(themeName);
+    resizeVisual();
+    void initGpu();
+
+    function setStatus(message, active = false) {
+      statusText.textContent = message;
+      statusDot.classList.toggle("active", active);
+    }
+
+    // ---- Audioquelle: Mikrofon / Eingabegerät / Computer-Ton ----
+    const sourceSelect = document.querySelector("#source");
+    const systemSource = "system";
+    // Computer-Ton ist ein digitales Vollpegel-Signal und deutlich lauter als ein Mikrofon.
+    // Um diesen Wert absenken, damit er denselben Anzeigebereich (minDb … maxDb) nutzt.
+    const systemOffsetDb = -20;
+    let levelOffsetDb = 0;
+
+    function fillSources(devices = []) {
+      const wanted = sourceSelect.value || loadSetting("lichtorgel-source", () => true, "default");
+      sourceSelect.replaceChildren(new Option("Mikrofon (Standard)", "default"));
+      for (const device of devices) {
+        // Ohne Freigabe liefern Browser leere IDs/Namen; "default"/"communications" sind Aliase
+        if (device.kind !== "audioinput" || !device.deviceId || ["default", "communications"].includes(device.deviceId)) continue;
+        sourceSelect.add(new Option(device.label || `Eingang ${sourceSelect.options.length}`, device.deviceId));
+      }
+      if (navigator.mediaDevices?.getDisplayMedia) {
+        sourceSelect.add(new Option("Computer-Ton (Tab/Bildschirm teilen)", systemSource));
+      }
+      const exists = [...sourceSelect.options].some((o) => o.value === wanted);
+      sourceSelect.value = exists ? wanted : "default";
+    }
+
+    async function refreshSources() {
+      try {
+        fillSources(await navigator.mediaDevices.enumerateDevices());
+      } catch {
+        fillSources();
+      }
+    }
+
+    async function openStream(source) {
+      const raw = { echoCancellation: false, noiseSuppression: false, autoGainControl: false };
+      if (source !== systemSource) {
+        const device = source === "default" ? {} : { deviceId: { exact: source } };
+        return navigator.mediaDevices.getUserMedia({ audio: { ...raw, latency: 0, ...device } });
+      }
+      // Chrome verlangt beim Teilen ein Videobild; es wird sofort beendet, nur der Ton bleibt.
+      const display = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: { ...raw, suppressLocalAudioPlayback: false },
+        systemAudio: "include",
+        selfBrowserSurface: "exclude"
+      });
+      display.getVideoTracks().forEach((track) => track.stop());
+      if (display.getAudioTracks().length === 0) {
+        display.getTracks().forEach((track) => track.stop());
+        throw Object.assign(new Error("Kein Audio in der Freigabe"), { name: "NoAudioError" });
+      }
+      return new MediaStream(display.getAudioTracks());
+    }
+
+    let sourceNode;          // Referenz halten, sonst kann der Knoten vom GC entfernt werden
+    let reconnectToken = 0;  // jede Nutzeraktion bricht laufende Wiederverbindungen ab
+
+    // Beobachtet die Audiospur: endet sie unerwartet (Gerätewechsel, AirPods, Ruhezustand),
+    // wird ein Mikrofon automatisch neu verbunden; Computer-Ton braucht einen neuen Klick.
+    function watchStream(source, isSystem) {
+      const track = stream.getAudioTracks()[0];
+      track.addEventListener("ended", () => {
+        if (stream?.getAudioTracks()[0] !== track) return;
+        console.warn("Audiospur beendet:", track.label);
+        if (isSystem) {
+          stopAudio();
+          setStatus("Audio-Freigabe beendet");
+        } else {
+          void reconnect(source, ++reconnectToken);
+        }
+      });
+      track.addEventListener("mute", () => {
+        if (stream?.getAudioTracks()[0] === track) setStatus("Eingang vom System stummgeschaltet …", true);
+      });
+      track.addEventListener("unmute", () => {
+        if (stream?.getAudioTracks()[0] === track) setStatus(isSystem ? "Computer-Ton aktiv" : "Mikrofon aktiv", true);
+      });
+    }
+
+    async function reconnect(source, token) {
+      stopAudio();
+      for (let attempt = 1; attempt <= 6; attempt += 1) {
+        setStatus(`Eingang getrennt – verbinde neu (Versuch ${attempt}) …`);
+        await new Promise((resolve) => setTimeout(resolve, 400 * attempt));
+        if (token !== reconnectToken || stream) return;
+        // Ist das gewählte Gerät verschwunden, auf das Standard-Mikrofon ausweichen
+        const devices = await navigator.mediaDevices.enumerateDevices().catch(() => []);
+        const exists = source === "default" || devices.some((d) => d.deviceId === source);
+        sourceSelect.value = exists ? source : "default";
+        await startAudio();
+        if (stream) {
+          if (!exists) setStatus("Gerät nicht mehr da – Standard-Mikrofon aktiv", true);
+          return;
+        }
+      }
+      setStatus("Eingang verloren – bitte „Start“ drücken");
+    }
+
+    function stopAudio() {
+      cancelAnimationFrame(animationFrame);
+      stream?.getTracks().forEach((track) => track.stop());
+      stream = undefined;
+      sourceNode = undefined;
+      analyser = undefined;
+      if (audioContext && audioContext.state !== "closed") {
+        void audioContext.close();
+      }
+      audioContext = undefined;
+      visLevels.fill(0);
+      drawVisual();
+      toggleButton.textContent = "Start";
+      toggleButton.classList.remove("stop");
+      toggleButton.disabled = false;
+      setStatus("Nicht aktiv");
+    }
+
+    // Ein Fehler in einem einzelnen Frame darf die Schleife nicht beenden
+    const frameErrors = new Set();
+    function drawLevels() {
+      if (!analyser || !audioContext) return;
+      animationFrame = requestAnimationFrame(drawLevels);
+      try {
+        renderFrame();
+      } catch (error) {
+        if (!frameErrors.has(error.message)) {
+          frameErrors.add(error.message);
+          console.error("Fehler im Frame (Schleife läuft weiter):", error);
+        }
+      }
+    }
+
+    function renderFrame() {
+      const values = new Float32Array(analyser.frequencyBinCount);
+      analyser.getFloatFrequencyData(values);
+      const binWidth = audioContext.sampleRate / analyser.fftSize;
+      const levels = [];
+
+      for (const band of bands) {
+        const firstBin = Math.max(1, Math.ceil(band.lower / binWidth));
+        const lastBin = Math.min(values.length - 1, Math.floor(band.upper / binWidth));
+        let powerTotal = 0;
+        let binCount = 0;
+
+        for (let bin = firstBin; bin <= lastBin; bin += 1) {
+          if (Number.isFinite(values[bin])) {
+            powerTotal += 10 ** (values[bin] / 10);
+            binCount += 1;
+          }
+        }
+
+        const db = binCount > 0 ? 10 * Math.log10(powerTotal / binCount) + levelOffsetDb : -Infinity;
+        const visibleDb = Math.max(minDb, Math.min(maxDb, db));
+        levels.push(visibleDb);
+      }
+
+      drawVisual(levels);
+    }
+
+    async function startAudio() {
+      const source = sourceSelect.value;
+      const isSystem = source === systemSource;
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setStatus("Audiozugriff benötigt HTTPS oder localhost");
+        return;
+      }
+
+      toggleButton.disabled = true;
+      setStatus(isSystem ? "Tab oder Bildschirm wählen und „Audio teilen“ aktivieren …" : "Mikrofonzugriff wird angefragt …");
+
+      try {
+        stream = await openStream(source);
+        watchStream(source, isSystem);
+        levelOffsetDb = isSystem ? systemOffsetDb : 0;
+        audioContext = new AudioContext({ latencyHint: "interactive" });
+        // Pausiert der Browser den Kontext (Gerätewechsel, Hintergrund), sofort fortsetzen
+        const context = audioContext;
+        context.addEventListener("statechange", () => {
+          if (context === audioContext && context.state !== "running" && context.state !== "closed") {
+            console.warn("AudioContext:", context.state);
+            void context.resume().catch(() => {});
+          }
+        });
+        sourceNode = audioContext.createMediaStreamSource(stream);
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = 1024;
+        analyser.smoothingTimeConstant = 0;
+        sourceNode.connect(analyser);
+
+        await audioContext.resume();
+        toggleButton.textContent = "Stopp";
+        toggleButton.classList.add("stop");
+        toggleButton.disabled = false;
+        setStatus(isSystem ? "Computer-Ton aktiv" : "Mikrofon aktiv", true);
+        // Gerätenamen sind erst nach einer Mikrofonfreigabe lesbar
+        if (!isSystem) void refreshSources();
+        drawLevels();
+      } catch (error) {
+        stopAudio();
+        const messages = {
+          NotAllowedError: isSystem ? "Freigabe abgebrochen oder nicht erlaubt" : "Mikrofonzugriff wurde nicht erlaubt",
+          NotFoundError: "Kein Mikrofon gefunden",
+          NotReadableError: "Eingang ist bereits anderweitig belegt",
+          OverconstrainedError: "Gewähltes Eingabegerät ist nicht verfügbar",
+          NoAudioError: "Kein Ton freigegeben – beim Teilen „Audio teilen“ aktivieren",
+          NotSupportedError: "Dieser Browser kann keinen Computer-Ton aufnehmen"
+        };
+        setStatus(messages[error.name] ?? "Audio konnte nicht gestartet werden");
+      }
+    }
+
+    toggleButton.addEventListener("click", () => {
+      reconnectToken += 1;
+      if (stream) {
+        stopAudio();
+      } else {
+        void startAudio();
+      }
+    });
+
+    sourceSelect.addEventListener("change", () => {
+      saveSetting("lichtorgel-source", sourceSelect.value);
+      reconnectToken += 1;
+      if (!stream) return;
+      stopAudio();
+      // Bildschirmfreigabe braucht einen eigenen Klick; Mikrofone direkt neu starten
+      if (sourceSelect.value === systemSource) {
+        setStatus("„Start“ drücken, um Computer-Ton zu teilen");
+      } else {
+        void startAudio();
+      }
+    });
+
+    fillSources();
+    void refreshSources();
+    navigator.mediaDevices?.addEventListener?.("devicechange", () => void refreshSources());
+    // Zurück im Vordergrund: pausierten Kontext wieder anwerfen
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden && audioContext?.state === "suspended") void audioContext.resume().catch(() => {});
+    });
+  </script>
+</body>
+</html>

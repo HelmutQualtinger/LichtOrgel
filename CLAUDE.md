@@ -1,0 +1,63 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Overview
+
+LichtOrgel is a microphone-driven "light organ": a single self-contained file, `index.html` (HTML + CSS + JS, no build step, no dependencies, no package.json, no git). The UI text and code comments are in German; keep them German.
+
+## Running
+
+Microphone access (`getUserMedia`) needs a secure context, so serve over localhost rather than opening the file directly:
+
+```sh
+python3 -m http.server 8000   # then open http://localhost:8000 (avoid port 5000: macOS AirPlay)
+```
+
+URL parameter `?gpu=webgpu | webgl | off` forces a render backend (useful for comparing backends or testing the Canvas 2D fallback).
+
+## Verification (no test suite)
+
+- Syntax check: extract the `<script>` body and run `node --check` on it.
+- Headless Chrome via `--dump-dom` works for synchronous checks (call `applyMode(name)` + `drawVisual(fakeLevels)` from an injected script). Do **not** use `--virtual-time-budget` for WebGPU: virtual time makes async shader compilation appear to hang. For WebGPU, drive real-time headless Chrome over the DevTools protocol (`--remote-debugging-port`, `Runtime.evaluate` with `awaitPromise`) and take screenshots with `Page.captureScreenshot`.
+- Chrome flags `--use-fake-ui-for-media-stream --use-fake-device-for-media-stream --auto-select-desktop-capture-source=Entire` let headless runs exercise both the mic and the screen-share path (served over `http://127.0.0.1`, not `file://`). Real microphone input can't be tested headless; `Oszilloskop`/`Wasserfall` and the GPU uniform values only get real data with a live mic.
+
+## Architecture
+
+One `requestAnimationFrame` loop, `drawLevels()`, runs while the mic is active:
+
+1. **Audio**: source menu `#source` (persisted as `lichtorgel-source`): default mic, any `audioinput` device (e.g. a BlackHole loopback), or `system` = computer sound via `getDisplayMedia` (Chrome/Edge only; video track is stopped immediately, user must tick "Share audio"). `openStream()` picks the API; processing (echo cancellation, noise suppression, auto gain) is deliberately **off** for low latency. Computer sound is shifted by `systemOffsetDb` (−20 dB) because a digital signal is much louder than a mic. Resilience: `watchStream()` auto-reconnects a mic whose track ends (device change, AirPods, sleep; falls back to the default mic if the device vanished), the `AudioContext` is resumed on `statechange`/`visibilitychange`, and `drawLevels()` schedules the next frame before rendering and catches per-frame errors, so a throwing mode can't kill the loop. Any user action bumps `reconnectToken` to cancel a pending reconnect. → `AnalyserNode` (`fftSize` 1024, `smoothingTimeConstant` 0). Latency was a user complaint; don't raise FFT size or smoothing without reason.
+2. **Bands**: 10 log-spaced bands, 40 Hz–16 kHz, power-averaged in dBFS and clamped to `minDb` −90 … `maxDb` −30. There is no level meter display anymore (removed on request); the bands only feed the visualization.
+
+**Layout**: one compact header bar (title, mic toggle, status, `<select>` menus for mode and theme, backend/fps label) above `#vis-stage`, which fills the rest of the viewport (`100dvh`, page never scrolls). A `ResizeObserver` on the stage resizes both canvases.
+3. **Visualization**: `drawLevels()` calls `drawVisual(levels)`, which normalizes levels into `visLevels` (0..1; instant attack, 0.25 decay), derives `bass`, `overall`, `dominant` and a `beat` flag (bass jump above its running average), then renders the selected mode. Called with no argument it draws the idle state (mic off, theme/mode switch, resize).
+
+### Modes, themes, backends
+
+- `themes` — palette objects (`bg`, three `colors`, `core`, `glow`). Adding an entry auto-creates its menu option.
+- `modes` — Canvas 2D implementations `(ctx, w, h, theme, state)`. Each mode clears or fades the canvas itself (`fade()` uses `destination-out` for trails). Per-mode scratch state lives in `fx`, which `renderModes()` points at `fxStore[mode]` before each call (two modes can run at once); `resetModeState()` clears it when a mode is entered. Modes must draw via their `ctx`/`ctx.canvas`, never `visCanvas` directly. Adding an entry auto-creates its menu option.
+- `gpuShaders` — optional GPU versions of a mode, keyed by the same name. If the active backend is GPU and a shader exists, it is used instead of the 2D mode on a stacked `#visual-gpu` canvas.
+- Backend chain in `initGpu()`: WebGPU (4 s timeout) → WebGL2 → Canvas 2D. A canvas keeps its first context type, so a failed attempt calls `freshGpuCanvas()` before trying the next.
+
+### Mode crossfades, auto mode and theme blending
+
+- Mode changes (manual and auto) go through `transitionTo()`: for `modeBlendMs` (2.5 s) the old and new mode render simultaneously in `renderModes()`. 2D+2D uses the two 2D layers (`#visual`, `#visual-b`) with opposite opacity; GPU+GPU draws both shaders in one pass, the new one blended via a blend constant (WebGPU: background-built `blendPipelines`, WebGL: `CONSTANT_ALPHA`); GPU+2D fades the GPU canvas, which lies on top. The theme background gradient sits on `#vis-stage`, so 2D layers stay transparent. `applyMode()` switches instantly (init, idle).
+- `#auto` toggle (persisted as `lichtorgel-auto`). `autoStep()` runs inside `drawVisual()`, so it only advances while audio is running. Every `autoModeMs` (20 s) it crossfades to the **next** mode in menu order on the next bass beat (at most 3 s late); every `autoThemeMs` (12 s) it blends to the next theme in order.
+- Theme changes (auto and manual) go through `blendToTheme()`. Modes and `renderGpu()` must read the theme from `currentTheme()` (passed in as `t`), never `themes[themeName]` directly: during a blend `currentTheme()` returns an interpolated theme object with hex colors. Caches derived from theme colors must key on the colors (see Plasma's LUT), not on `themeName`.
+- Choosing a mode or theme by hand resets the auto schedule.
+
+### Shader authoring rules (important)
+
+Shaders are written **once** in a restricted GLSL subset (`shaderLib` + each `gpuShaders` entry, with a `vec4 shade(vec2 fc)` entry point, `fc` in device pixels with top-left origin). WebGL2 uses them as-is; for WebGPU `toWGSL()` converts them with regex. Code must therefore follow:
+
+- every declaration typed (`float x = ...`), no implicit int→float; floats always written with `.0`
+- braces on every `if`/`for`; no ternary operator; no swizzle assignment; never assign to function parameters
+- use `atan2` and `fmod` (defined in both preambles), not `atan(y,x)`/`mod`
+- helper functions must be defined before use (GLSL order)
+- avoid GLSL/WGSL reserved words as identifiers (e.g. `half`, `sample`, `filter`, `in`, `out`)
+
+Uniforms are one `vec4 u[10]` array (layout documented in the comment above `shaderLib`); `renderGpu()` fills it. After changing a shader, verify it compiles under **both** `?gpu=webgpu` and `?gpu=webgl`.
+
+### Persistence
+
+Selected theme and mode are stored in `localStorage` (`lichtorgel-theme`, `lichtorgel-mode`) via `loadSetting`/`saveSetting`, wrapped in try/catch.
