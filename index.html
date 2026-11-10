@@ -444,9 +444,9 @@
       if (now === mandel.last) return;
       const dt = mandel.last ? Math.min(0.1, (now - mandel.last) / 1000) : 0;
       mandel.last = now;
-      // ca. 70–110 s pro Zoomfahrt, schneller bei Lautstärke, Schub bei Bass-Schlägen
-      mandel.zt += dt * (0.009 + s.overall * 0.014) + (s.beat ? 0.0012 : 0);
-      mandel.rot += dt * (0.05 + s.overall * 0.4);
+      // ca. 3–5 min pro Zoomfahrt, etwas schneller bei Lautstärke, kleiner Schub bei Bass-Schlägen
+      mandel.zt += dt * (0.003 + s.overall * 0.004) + (s.beat ? 0.0003 : 0);
+      mandel.rot += dt * (0.01 + s.overall * 0.06);
       const cyc = mandel.zt % 1;
       const idx = Math.floor(mandel.zt) % mandelSpots.length;
       if (idx !== mandel.spot) {
