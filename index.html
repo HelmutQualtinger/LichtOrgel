@@ -251,7 +251,7 @@
         synth_forest: "Dark Psy (Forest) – 152 BPM", synth_psydub: "Psy-Dub – 72 BPM", synth_sixties: "60s-Psychedelic-Orgel – 112 BPM",
         synth_krautrock: "Krautrock-Motorik – 124 BPM", synth_bowls: "Klangschalen-Meditation",
         musicConnecting: (n) => `Verbinde mit ${n} …`, musicPlaying: (n) => `♪ ${n}`,
-        errStream: (n) => `${n} nicht abspielbar`, clickToPlay: "Zum Abspielen irgendwo klicken",
+        errStream: (n) => `${n} nicht abspielbar`, clickToPlay: "Zum Abspielen irgendwo klicken", maxIter: (n) => `max. ${n} Iterationen`,
         modes: {},
         themes: {}
       },
@@ -280,7 +280,7 @@
         synth_forest: "Dark psy (forest) – 152 BPM", synth_psydub: "Psy dub – 72 BPM", synth_sixties: "60s psychedelic organ – 112 BPM",
         synth_krautrock: "Krautrock motorik – 124 BPM", synth_bowls: "Singing bowl meditation",
         musicConnecting: (n) => `Connecting to ${n} …`, musicPlaying: (n) => `♪ ${n}`,
-        errStream: (n) => `${n} cannot be played`, clickToPlay: "Click anywhere to play",
+        errStream: (n) => `${n} cannot be played`, clickToPlay: "Click anywhere to play", maxIter: (n) => `max. ${n} iterations`,
         modes: { Kreis: "Circle", Welle: "Wave", Oszilloskop: "Oscilloscope", Partikel: "Particles", Wasserfall: "Waterfall",
           "Blüte": "Blossom", Sternflug: "Starflight", Galaxie: "Galaxy", Kaleidoskop: "Kaleidoscope", Blitze: "Lightning" },
         themes: { Glut: "Ember", Ozean: "Ocean", Prisma: "Prism", Gift: "Toxic", Klassik: "Classic" }
@@ -310,7 +310,7 @@
         synth_forest: "Dark psy (forest) – 152 BPM", synth_psydub: "Psy dub – 72 BPM", synth_sixties: "Organo psichedelico anni '60 – 112 BPM",
         synth_krautrock: "Krautrock motorik – 124 BPM", synth_bowls: "Meditazione con campane tibetane",
         musicConnecting: (n) => `Connessione a ${n} …`, musicPlaying: (n) => `♪ ${n}`,
-        errStream: (n) => `Impossibile riprodurre ${n}`, clickToPlay: "Clicca ovunque per ascoltare",
+        errStream: (n) => `Impossibile riprodurre ${n}`, clickToPlay: "Clicca ovunque per ascoltare", maxIter: (n) => `max. ${n} iterazioni`,
         modes: { Kreis: "Cerchio", Welle: "Onda", Oszilloskop: "Oscilloscopio", Partikel: "Particelle", Wasserfall: "Cascata",
           "Blüte": "Fiore", Sternflug: "Volo stellare", Galaxie: "Galassia", Kaleidoskop: "Caleidoscopio", Terrain: "Terreno", Blitze: "Fulmini" },
         themes: { Glut: "Brace", Ozean: "Oceano", Prisma: "Prisma", Gift: "Tossico", Klassik: "Classico" }
@@ -1800,7 +1800,12 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
       fpsFrames += 1;
       if (now - fpsSince < 500 && fpsFrames > 1) return;
       const fps = analyser ? ` · ${Math.round((fpsFrames * 1000) / Math.max(1, now - fpsSince))} fps` : "";
-      backendLabel.textContent = (gpuActive ? gpu.kind : "Canvas 2D") + fps;
+      // Im Mandelbrot-Modus zusätzlich die aktuelle maximale Iterationszahl (Canvas 2D begrenzt auf 450)
+      let iter = "";
+      if (modeName === "Mandelbrot" && mandel.ref) {
+        iter = ` · ${tr("maxIter", gpuActive ? mandel.maxIt : Math.min(mandel.maxIt, 450))}`;
+      }
+      backendLabel.textContent = (gpuActive ? gpu.kind : "Canvas 2D") + fps + iter;
       fpsFrames = 0;
       fpsSince = now;
     }
