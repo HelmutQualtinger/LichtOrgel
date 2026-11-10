@@ -638,7 +638,7 @@
       mandel.offX = mandel.panVec[0] * ease;
       mandel.offY = mandel.panVec[1] * ease;
       mandel.scale = 2.6 * 10 ** -mandel.depth * (1 - s.bass * 0.08);
-      mandel.maxIt = Math.min(orbitMax - 2, Math.round(250 + mandel.depth * 30));
+      mandel.maxIt = Math.min(orbitMax - 2, Math.round(500 + mandel.depth * 60));
       mandelScan(visCanvas.clientWidth / Math.max(1, visCanvas.clientHeight), 2);
       // Lineare Farbzuordnung: die Palette läuft heatCycles-mal über den sichtbaren Iterationsbereich
       // (weich nachgeführt); Farbe = fract(mu · colorK + colorOff)
