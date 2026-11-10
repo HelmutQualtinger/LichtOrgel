@@ -606,19 +606,26 @@
         ctx.globalAlpha = 1;
       },
 
-      // Balken über einem Horizont mit Spiegelung und fallenden Spitzen
+      // Balken über einem Horizont mit kräftiger Spiegelung, um 45° gegen den Uhrzeigersinn gedreht
       Skyline(ctx, w, h, t) {
         ctx.clearRect(0, 0, w, h);
+        // Szene so groß, dass sie den Canvas auch gedreht vollständig bedeckt
+        const size = (w + h) / Math.SQRT2;
+        ctx.translate(w / 2, h / 2);
+        ctx.rotate(-Math.PI / 4);
+        ctx.translate(-size / 2, -size / 2);
         const n = skylinePeaks.length;
-        const horizon = h * 0.66;
+        const horizon = size * 0.5;
+        const maxH = size * 0.4;
         const gap = 3;
-        const barW = (w - gap * (n + 1)) / n;
+        const barW = (size - gap * (n + 1)) / n;
+        const time = performance.now() / 1000;
         ctx.shadowBlur = 0;
         for (let i = 0; i < n; i += 1) {
           const v = levelAt(i / (n - 1));
           skylinePeaks[i] = Math.max(v, skylinePeaks[i] - 0.01);
           const x = gap + i * (barW + gap);
-          const barH = 3 + v * horizon * 0.92;
+          const barH = 3 + v * maxH;
           const color = paletteAt(t.colors, i / (n - 1));
           const grad = ctx.createLinearGradient(0, horizon - barH, 0, horizon);
           grad.addColorStop(0, color);
@@ -626,14 +633,30 @@
           ctx.globalAlpha = 1;
           ctx.fillStyle = grad;
           ctx.fillRect(x, horizon - barH, barW, barH);
-          ctx.globalAlpha = 0.18;
-          ctx.fillStyle = color;
-          ctx.fillRect(x, horizon + 2, barW, barH * 0.45);
+          // Spiegelung: fast so lang wie der Balken, kräftig am Horizont, nach unten ausblendend, leicht flimmernd
+          const reflectH = barH * 0.9;
+          const reflect = ctx.createLinearGradient(0, horizon, 0, horizon + reflectH);
+          reflect.addColorStop(0, color);
+          reflect.addColorStop(0.6, hexMix(t.bg[1], t.colors[1], 0.35));
+          reflect.addColorStop(1, "rgba(0, 0, 0, 0)");
+          ctx.globalAlpha = 0.6 + 0.12 * Math.sin(time * 3 + i * 0.7);
+          ctx.fillStyle = reflect;
+          ctx.fillRect(x, horizon + 2, barW, reflectH);
+          // Spitzenmarke und ihr Spiegelbild
+          const peakY = skylinePeaks[i] * maxH;
           ctx.globalAlpha = 1;
           glow(ctx, t.core, t.glow * 0.6);
-          ctx.fillRect(x, horizon - 4 - skylinePeaks[i] * horizon * 0.92, barW, 2);
+          ctx.fillRect(x, horizon - 4 - peakY, barW, 2);
+          ctx.globalAlpha = 0.45;
+          ctx.fillRect(x, horizon + 2 + peakY * 0.9, barW, 2);
           ctx.shadowBlur = 0;
         }
+        // leuchtende Horizontlinie
+        ctx.globalAlpha = 0.7;
+        glow(ctx, t.core, t.glow);
+        ctx.fillRect(0, horizon - 1, size, 2);
+        ctx.globalAlpha = 1;
+        ctx.shadowBlur = 0;
       },
 
       // Rosenkurven: Bass, Mitten und Höhen als drei rotierende Blütenblätter-Lagen
