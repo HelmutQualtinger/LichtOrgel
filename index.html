@@ -583,7 +583,7 @@
     }
     // Zustände: "pan" (Schwenk zum Ziel), "in" (Zoom hinein bis 1e-16 oder bis das Bild zu über 90 % schwarz
     // ist), "out" (wieder ganz heraus, dann nächster Ort). Die Zoomgeschwindigkeit ändert sich weich.
-    const mandel = { phase: "pan", pan: 0, panSecs: 5, panVec: [0, 0], depth: 0, vel: 0, rot: 0, hue: 0, kick: 0, last: 0, spot: -1,
+    const mandel = { phase: "pan", pan: 0, panSecs: 5, panVec: [0, 0], depth: 0, vel: 0, rot: 0, hue: 0, kick: 0, pitch: 0.3, last: 0, spot: -1,
       ref: null, version: 0, offX: 0, offY: 0, scale: 2.6, maxIt: 250, scan: { row: 0, escaped: [] }, black: 0,
       lo: 0, hi: 250, loTarget: 0, hiTarget: 250, colorK: 0, colorOff: 0 };
     function mandelStep(s) {
@@ -644,7 +644,16 @@
       mandel.lo += (mandel.loTarget - mandel.lo) * follow;
       mandel.hi += (mandel.hiTarget - mandel.hi) * follow;
       mandel.colorK = heatCycles / Math.max(24, mandel.hi - mandel.lo);
-      mandel.colorOff = mandel.hue - mandel.lo * mandel.colorK;
+      // Tonhöhe: spektraler Schwerpunkt der Bänder (0 = Bass … 1 = Höhen), geglättet; verschiebt die Farbtabelle
+      let weight = 0;
+      let moment = 0;
+      for (let i = 0; i < bandCount; i += 1) {
+        const v = visLevels[i] * visLevels[i];
+        weight += v;
+        moment += v * i;
+      }
+      if (weight > 0.001) mandel.pitch += (moment / weight / (bandCount - 1) - mandel.pitch) * Math.min(1, dt * 3);
+      mandel.colorOff = mandel.hue + mandel.pitch - mandel.lo * mandel.colorK;
     }
 
     let fx = {};
