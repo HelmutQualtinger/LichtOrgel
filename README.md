@@ -72,7 +72,7 @@ Trennt sich ein Mikrofon (Gerätewechsel, Bluetooth, Ruhezustand), verbindet die
 | Tunnel (GPU) | Flug durch einen Tunnel; Ringe und Tempo folgen Spektrum und Bass |
 | Partikel | 320 Partikel in einem Strömungsfeld, je eines Frequenzbands |
 | Wasserfall | Laufendes Spektrogramm in voller Frequenzauflösung |
-| Skyline | 48 aufrechte Balken mit fallenden Spitzenwerten; ihre kräftige, flimmernde Spiegelung ist um 45° gedreht |
+| Skyline | 48 aufrechte Balken mit fallenden Spitzenwerten; ihre kräftige, flimmernde Spiegelung fällt um 45° schräg nach rechts unten |
 | Blüte | Drei rotierende Rosenkurven für Bass, Mitten und Höhen |
 | Sternflug | Warp-Sternenfeld; Tempo nach Lautstärke, Schub bei Bass-Schlägen |
 | Galaxie (GPU) | Spiralgalaxie; Bass im Kern, Höhen in den äußeren Armen |

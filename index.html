@@ -606,7 +606,7 @@
         ctx.globalAlpha = 1;
       },
 
-      // Aufrechte Balken über einem Horizont; ihre kräftige Spiegelung ist um 45° gegen den Uhrzeigersinn gedreht
+      // Aufrechte Balken über einem Horizont; ihre kräftige Spiegelung ist um 45° nach rechts geschert
       Skyline(ctx, w, h, t) {
         ctx.clearRect(0, 0, w, h);
         const n = skylinePeaks.length;
@@ -632,22 +632,22 @@
           ctx.fillRect(x, horizon - 4 - skylinePeaks[i] * maxH, barW, 2);
           ctx.shadowBlur = 0;
 
-          // Spiegelung: um den Fußpunkt des Balkens 45° gegen den Uhrzeigersinn gedreht,
-          // fast so lang wie der Balken, kräftig am Horizont, nach unten ausblendend, leicht flimmernd
-          const reflectH = barH * 0.9;
+          // Spiegelung: um 45° nach rechts geschert (Parallelogramm, Ober- und Unterkante waagerecht),
+          // kräftig am Horizont, nach unten ausblendend, leicht flimmernd
+          const reflectH = barH * 0.64;
           ctx.save();
-          ctx.translate(x + barW / 2, horizon + 2);
-          ctx.rotate(-Math.PI / 4);
+          ctx.translate(x, horizon + 2);
+          ctx.transform(1, 0, 1, 1, 0, 0); // x' = x + y: Seiten laufen unter 45° nach rechts unten
           const reflect = ctx.createLinearGradient(0, 0, 0, reflectH);
           reflect.addColorStop(0, color);
           reflect.addColorStop(0.6, hexMix(t.bg[1], t.colors[1], 0.35));
           reflect.addColorStop(1, "rgba(0, 0, 0, 0)");
           ctx.globalAlpha = 0.6 + 0.12 * Math.sin(time * 3 + i * 0.7);
           ctx.fillStyle = reflect;
-          ctx.fillRect(-barW / 2, 0, barW, reflectH);
+          ctx.fillRect(0, 0, barW, reflectH);
           ctx.globalAlpha = 0.45;
           ctx.fillStyle = t.core;
-          ctx.fillRect(-barW / 2, skylinePeaks[i] * maxH * 0.9, barW, 2);
+          ctx.fillRect(0, skylinePeaks[i] * maxH * 0.64, barW, 2);
           ctx.restore();
         }
         // leuchtende Horizontlinie
