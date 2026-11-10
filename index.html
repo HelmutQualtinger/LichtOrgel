@@ -392,7 +392,7 @@
       ctx.shadowBlur = blur;
     }
 
-    // ---- Mandelbrot-Tiefenzoom (bis ca. 1e-30) ----
+    // ---- Mandelbrot-Tiefenzoom (bis ca. 1e-16, technisch bis ca. 1e-30 möglich) ----
     // Ziele sind Misiurewicz-Punkte (vorab mit 70 Stellen berechnet), die in jeder Tiefe Struktur zeigen.
     // Die CPU rechnet am Ziel einen Referenz-Orbit mit BigInt-Festkomma (200 Bit); GPU bzw. 2D-Modus
     // rechnen pro Pixel nur die Abweichung davon (Perturbation, Rebasing gegen Glitches).
@@ -405,7 +405,7 @@
       ["-1.7704212973070454434835101106613213727817043473918", "0.0051195002056617660718120592823014334308887069267422"],
       ["0.0016429555471499090057645804958991985039939880610133", "-0.82246653001909136706609518709147109374940163546361"]
     ];
-    const mandelDepth = 30.6; // Zehnerpotenzen pro Zoomfahrt: 2,6 → ca. 6e-31
+    const mandelDepth = 16;   // Zehnerpotenzen bis zum Umkehrpunkt: 2,6 → ca. 2,6e-16
     const orbitMax = 4096;    // = Orbit-Textur 1024 × 4
     const fixBits = 200n;
     function toFixed(str) {
@@ -438,30 +438,35 @@
       if (!orbitCache.has(i)) orbitCache.set(i, referenceOrbit(mandelSpots[i]));
       return orbitCache.get(i);
     }
-    const mandel = { zt: 0, rot: 0, last: 0, spot: -1, ref: null, version: 0, offX: 0, offY: 0, scale: 2.6, maxIt: 200, fade: 1 };
+    const mandel = { zt: 0, rot: 0, last: 0, spot: -1, ref: null, from: null, version: 0, offX: 0, offY: 0, scale: 2.6, maxIt: 200, fade: 1 };
     function mandelStep(s) {
       const now = performance.now();
       if (now === mandel.last) return;
       const dt = mandel.last ? Math.min(0.1, (now - mandel.last) / 1000) : 0;
       mandel.last = now;
-      // ca. 3–5 min pro Zoomfahrt, etwas schneller bei Lautstärke, kleiner Schub bei Bass-Schlägen
-      mandel.zt += dt * (0.003 + s.overall * 0.004) + (s.beat ? 0.0003 : 0);
+      // Ein Zyklus: Schwenk vom vorigen Ort zum Ziel, Zoom hinein bis 1e-16 (65 %), wieder heraus (35 %),
+      // dann weiter zum nächsten Ort. Ca. 2,5–3,5 min, etwas schneller bei Lautstärke.
+      mandel.zt += dt * (0.005 + s.overall * 0.004) + (s.beat ? 0.0003 : 0);
       mandel.rot += dt * (0.01 + s.overall * 0.06);
       const cyc = mandel.zt % 1;
       const idx = Math.floor(mandel.zt) % mandelSpots.length;
       if (idx !== mandel.spot) {
         mandel.spot = idx;
         mandel.ref = orbitFor(idx);
+        mandel.from = mandel.from ? orbitFor((idx + mandelSpots.length - 1) % mandelSpots.length).center : [-0.6, 0];
         mandel.version += 1;
         setTimeout(() => orbitFor((idx + 1) % mandelSpots.length), 1000); // nächsten Orbit vorbereiten
       }
-      const e = Math.min(1, cyc / 0.04);
+      const e = Math.min(1, cyc / 0.06);
       const ease = 1 - e * e * (3 - 2 * e);
-      mandel.offX = (-0.6 - mandel.ref.center[0]) * ease;
-      mandel.offY = -mandel.ref.center[1] * ease;
-      mandel.scale = 2.6 * 10 ** (-cyc * mandelDepth) * (1 - s.bass * 0.08);
-      mandel.maxIt = Math.min(orbitMax - 2, Math.round(200 + cyc * mandelDepth * 40));
-      mandel.fade = Math.min(1, cyc / 0.015, (1 - cyc) / 0.015);
+      mandel.offX = (mandel.from[0] - mandel.ref.center[0]) * ease;
+      mandel.offY = (mandel.from[1] - mandel.ref.center[1]) * ease;
+      const depth = cyc < 0.65
+        ? mandelDepth * (1 - Math.cos((Math.PI * cyc) / 0.65)) / 2
+        : mandelDepth * (1 + Math.cos((Math.PI * (cyc - 0.65)) / 0.35)) / 2;
+      mandel.scale = 2.6 * 10 ** -depth * (1 - s.bass * 0.08);
+      mandel.maxIt = Math.min(orbitMax - 2, Math.round(150 + depth * 35));
+      mandel.fade = 1;
     }
 
     let fx = {};
@@ -1459,6 +1464,24 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
     }
 
     function renderGpu(t, s, name, next, mix) {
+      // Mandelbrot ist teuer (bis ~700 Iterationen pro Pixel): Auflösung passt sich der Bildrate an
+      // (unter ~50 fps weniger Pixel, bei Luft wieder mehr; Stufen von 0,05 gegen ständiges Umskalieren)
+      const mandelOn = name === "Mandelbrot" || next === "Mandelbrot";
+      const now = performance.now();
+      const frameMs = now - (gpuState.lastFrame ?? now);
+      gpuState.lastFrame = now;
+      if (mandelOn && frameMs > 0 && frameMs < 200) {
+        const cap = Math.min(gpuRatio, isMobile ? 0.75 : 1);
+        if (frameMs > 20) gpuState.mandelRes = Math.max(0.4, (gpuState.mandelRes ?? cap) - 0.01);
+        else if (frameMs < 17.5) gpuState.mandelRes = Math.min(cap, (gpuState.mandelRes ?? cap) + 0.002);
+      }
+      const r = mandelOn ? Math.round(Math.min(gpuState.mandelRes ?? 1, gpuRatio) * 20) / 20 : gpuRatio;
+      const gw = Math.round(visCanvas.clientWidth * r);
+      const gh = Math.round(visCanvas.clientHeight * r);
+      if (gpuCanvas.width !== gw || gpuCanvas.height !== gh) {
+        gpuCanvas.width = gw;
+        gpuCanvas.height = gh;
+      }
       gpuState.rot += 0.002 + s.overall * 0.02;
       gpuState.travel += 0.01 + s.overall * 0.06 + (s.beat ? 0.15 : 0);
       gpuState.pulse = s.beat ? 1 : gpuState.pulse * 0.85;
@@ -1473,7 +1496,7 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
       U.set([...hexRgb(t.core), t.glow / 20], 28);
       U.set([...hexRgb(t.bg[0]), gpuState.rot], 32);
       U.set([...hexRgb(t.bg[1]), gpuState.travel], 36);
-      if (name === "Mandelbrot" || next === "Mandelbrot") {
+      if (mandelOn) {
         mandelStep(s);
         U.set([mandel.offX, mandel.offY, mandel.scale, mandel.maxIt, mandel.rot, mandel.fade, mandel.ref.length, 0], 40);
       }
@@ -1917,6 +1940,7 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
     // Handys/Tablets: geringere Render-Auflösung lässt dem Audio-Thread genug Rechenzeit
     const isMobile = matchMedia("(pointer: coarse)").matches;
 
+    let gpuRatio = 1;
     function resizeVisual() {
       const ratio = Math.min(window.devicePixelRatio || 1, isMobile ? 1.5 : 3);
       for (const { canvas, ctx } of layers) {
@@ -1924,7 +1948,7 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
         canvas.height = Math.round(canvas.clientHeight * ratio);
         ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
       }
-      const gpuRatio = Math.min(ratio, isMobile ? 1.25 : 2);
+      gpuRatio = Math.min(ratio, isMobile ? 1.25 : 2);
       gpuCanvas.width = Math.round(visCanvas.clientWidth * gpuRatio);
       gpuCanvas.height = Math.round(visCanvas.clientHeight * gpuRatio);
       particles.length = 0;
