@@ -441,7 +441,7 @@
     // Hitze-Palette des Mandelbrot-Modus (Stützstellen 0..1; wird gespiegelt, damit der Kreislauf nahtlos ist)
     const heatStops = ["#0b0018", "#3a0a52", "#8a1046", "#d0281e", "#f2620c", "#ffa21a", "#ffd95a", "#fff8dc"];
     const heatRgbStops = heatStops.map((c) => [1, 3, 5].map((o) => parseInt(c.slice(o, o + 2), 16)));
-    const heatCycles = 8; // so oft durchläuft die Palette den Iterationsbereich
+    const heatCycles = 8; // so oft durchläuft die Palette den sichtbaren Iterationsbereich
     function heatRgb(t) {
       const x = Math.max(0, Math.min(0.9999, t)) * (heatRgbStops.length - 1);
       const i = Math.floor(x);
@@ -473,27 +473,34 @@
       mandelR2 = r2;
       return n;
     }
-    // Anteil schwarzer Pixel (Inneres der Menge) auf einem groben Raster von 24 × 14 Punkten
-    function mandelBlackShare(aspect) {
+    // Grobes Raster von 24 × 14 Punkten über das sichtbare Bild: Anteil schwarzer Pixel (Inneres der Menge)
+    // und sichtbarer Iterationsbereich (5.–95. Perzentil der entkommenen Punkte) für die Farbzuordnung
+    function mandelSample(aspect) {
       const { orbit, length: olen } = mandel.ref;
       const ca = Math.cos(mandel.rot) * mandel.scale;
       const sa = Math.sin(mandel.rot) * mandel.scale;
       const ax = Math.max(1, aspect);
       const ay = Math.max(1, 1 / aspect);
-      let black = 0;
+      const escaped = [];
       for (let j = 0; j < 14; j += 1) {
         for (let i = 0; i < 24; i += 1) {
           const px = ((i + 0.5) / 24 - 0.5) * ax;
           const py = ((j + 0.5) / 14 - 0.5) * ay;
-          if (mandelIter(orbit, olen, mandel.offX + px * ca - py * sa, mandel.offY + px * sa + py * ca, mandel.maxIt) >= mandel.maxIt) black += 1;
+          const n = mandelIter(orbit, olen, mandel.offX + px * ca - py * sa, mandel.offY + px * sa + py * ca, mandel.maxIt);
+          if (n < mandel.maxIt) escaped.push(n);
         }
       }
-      return black / (24 * 14);
+      mandel.black = 1 - escaped.length / (24 * 14);
+      if (escaped.length > 8) {
+        escaped.sort((a, b) => a - b);
+        mandel.loTarget = escaped[Math.floor(escaped.length * 0.05)];
+        mandel.hiTarget = escaped[Math.floor(escaped.length * 0.95)];
+      }
     }
     // Zustände: "pan" (Schwenk zum nächsten Ort), "in" (Zoom hinein bis 1e-16 oder bis das Bild
     // zu über 90 % schwarz ist), "out" (wieder ganz heraus). Die Zoomgeschwindigkeit ändert sich weich.
     const mandel = { phase: "pan", pan: 0, depth: 0, vel: 0, rot: 0, hue: 0, last: 0, spot: -1, ref: null, from: [-0.6, 0],
-      version: 0, offX: 0, offY: 0, scale: 2.6, maxIt: 150, fade: 1, check: 0, black: 0 };
+      version: 0, offX: 0, offY: 0, scale: 2.6, maxIt: 250, check: 0, black: 0, lo: 0, hi: 250, loTarget: 0, hiTarget: 250, colorK: 0, colorOff: 0 };
     function mandelStep(s) {
       const now = performance.now();
       if (now === mandel.last) return;
@@ -509,7 +516,7 @@
       }
       if (mandel.phase === "pan") {
         mandel.pan = Math.min(1, mandel.pan + dt / 5);
-        if (mandel.pan >= 1) { mandel.phase = "in"; mandel.check = 0; }
+        if (mandel.pan >= 1) { mandel.phase = "in"; mandel.black = 0; }
       } else {
         // Zielgeschwindigkeit in Zehnerpotenzen pro Sekunde; vor dem Umkehrpunkt abbremsen
         const want = mandel.phase === "in"
@@ -518,10 +525,6 @@
         mandel.vel += (want - mandel.vel) * Math.min(1, dt * 0.8);
         mandel.depth = Math.max(0, Math.min(mandelDepth, mandel.depth + mandel.vel * dt + (s.beat && mandel.phase === "in" ? 0.01 : 0)));
         if (mandel.phase === "in") {
-          mandel.check += 1;
-          if (mandel.depth > 3 && mandel.check % 12 === 0) {
-            mandel.black = mandelBlackShare(visCanvas.clientWidth / Math.max(1, visCanvas.clientHeight));
-          }
           if (mandel.depth >= mandelDepth - 0.02 || (mandel.depth > 3 && mandel.black > 0.9)) { mandel.phase = "out"; mandel.black = 0; }
         } else if (mandel.depth <= 0.001) {
           const next = (mandel.spot + 1) % mandelSpots.length;
@@ -541,6 +544,14 @@
       mandel.offY = (mandel.from[1] - mandel.ref.center[1]) * ease;
       mandel.scale = 2.6 * 10 ** -mandel.depth * (1 - s.bass * 0.08);
       mandel.maxIt = Math.min(orbitMax - 2, Math.round(250 + mandel.depth * 30));
+      mandel.check += 1;
+      if (mandel.check % 12 === 0) mandelSample(visCanvas.clientWidth / Math.max(1, visCanvas.clientHeight));
+      // Die Palette läuft heatCycles-mal über den sichtbaren Iterationsbereich (weich nachgeführt)
+      const follow = Math.min(1, dt * 1.5);
+      mandel.lo += (mandel.loTarget - mandel.lo) * follow;
+      mandel.hi += (mandel.hiTarget - mandel.hi) * follow;
+      mandel.colorK = heatCycles / Math.max(24, mandel.hi - mandel.lo);
+      mandel.colorOff = mandel.hue - mandel.lo * mandel.colorK;
     }
 
     let fx = {};
@@ -989,7 +1000,7 @@
             if (n < maxIt) {
               const mu = n + 1 - Math.log2(Math.max(1, Math.log(mandelR2) / 2));
               const lv = levelAt((mu * 0.02) % 1);
-              const tri = (((mu / mandel.maxIt) * heatCycles + mandel.hue + lv * 0.3) % 1) * 2;
+              const tri = ((((mu * mandel.colorK + mandel.colorOff + lv * 0.3) % 1) + 1) % 1) * 2;
               rgb = heatRgb(tri < 1 ? tri : 2 - tri);
             }
             data[o] = Math.min(255, rgb[0]);
@@ -1216,7 +1227,7 @@ vec4 shade(vec2 fc) {
       // Mandelbrot-Tiefenzoom per Perturbation: Referenz-Orbit Z_m (BigInt, CPU) liegt in der Orbit-Textur,
       // pro Pixel wird nur dz iteriert (dz' = 2·Z·dz + dz² + dc). Rebasing (dz = z, m = 0), sobald |z| < |dz|
       // oder der Orbit endet. float32 reicht für dc bis ca. 1e-36. u[10] = Versatz xy, Maßstab, max. Iterationen;
-      // u[11] = Drehung, Abblendung, Orbitlänge, Farbverschiebung (der Ton verschiebt die Farbtabelle, nicht die Helligkeit)
+      // u[11] = Drehung, Farbschritt pro Iteration, Orbitlänge, Farbversatz (der Ton verschiebt die Farbtabelle, nicht die Helligkeit)
       Mandelbrot: `
 // Hitze-Palette, gleiche Stützstellen wie heatStops
 vec3 heat(float t) {
@@ -1264,10 +1275,10 @@ vec4 shade(vec2 fc) {
   if (n < maxIt) {
     float mu = n + 1.0 - log2(max(log(r2) * 0.5, 1.0));
     float lv = levelAt(fract(mu * 0.02));
-    float pt = 1.0 - abs(fract(mu / maxIt * 8.0 + u[11].w + lv * 0.3) * 2.0 - 1.0);
+    float pt = 1.0 - abs(fract(mu * u[11].y + u[11].w + lv * 0.3) * 2.0 - 1.0);
     vec3 ext = heat(pt);
     ext = ext + u[7].xyz * exp(-abs(maxIt - mu) * 0.02) * 0.4 * u[7].w;
-    col = mix(col, ext, u[11].y);
+    col = ext;
   }
   col = 1.0 - exp(-col * 1.3);
   return vec4(col, 1.0);
@@ -1529,15 +1540,17 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
 
     function renderGpu(t, s, name, next, mix) {
       // Mandelbrot ist teuer (bis ~700 Iterationen pro Pixel): Auflösung passt sich der Bildrate an
-      // (unter ~50 fps weniger Pixel, bei Luft wieder mehr; Stufen von 0,05 gegen ständiges Umskalieren)
+      // (im Mittel unter ~45 fps weniger Pixel, bis 0,5; bei Luft wieder mehr; Stufen von 0,05 gegen ständiges Umskalieren)
       const mandelOn = name === "Mandelbrot" || next === "Mandelbrot";
       const now = performance.now();
       const frameMs = now - (gpuState.lastFrame ?? now);
       gpuState.lastFrame = now;
       if (mandelOn && frameMs > 0 && frameMs < 200) {
+        // geglättete Frame-Zeit, damit einzelne Ruckler die Auflösung nicht absenken
+        gpuState.frameAvg = (gpuState.frameAvg ?? frameMs) * 0.95 + frameMs * 0.05;
         const cap = Math.min(gpuRatio, isMobile ? 0.75 : 1);
-        if (frameMs > 20) gpuState.mandelRes = Math.max(0.4, (gpuState.mandelRes ?? cap) - 0.01);
-        else if (frameMs < 17.5) gpuState.mandelRes = Math.min(cap, (gpuState.mandelRes ?? cap) + 0.002);
+        if (gpuState.frameAvg > 22) gpuState.mandelRes = Math.max(0.5, (gpuState.mandelRes ?? cap) - 0.005);
+        else if (gpuState.frameAvg < 18.5) gpuState.mandelRes = Math.min(cap, (gpuState.mandelRes ?? cap) + 0.005);
       }
       const r = mandelOn ? Math.round(Math.min(gpuState.mandelRes ?? 1, gpuRatio) * 20) / 20 : gpuRatio;
       const gw = Math.round(visCanvas.clientWidth * r);
@@ -1562,7 +1575,7 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
       U.set([...hexRgb(t.bg[1]), gpuState.travel], 36);
       if (mandelOn) {
         mandelStep(s);
-        U.set([mandel.offX, mandel.offY, mandel.scale, mandel.maxIt, mandel.rot, mandel.fade, mandel.ref.length, mandel.hue], 40);
+        U.set([mandel.offX, mandel.offY, mandel.scale, mandel.maxIt, mandel.rot, mandel.colorK, mandel.ref.length, mandel.colorOff], 40);
       }
       gpu.render(name, next, mix);
     }
