@@ -107,7 +107,15 @@
       cursor: pointer;
     }
     .source-select { max-width: 200px; text-overflow: ellipsis; }
-    @media (max-width: 1150px) { .picker > span:first-child { display: none; } }
+    .lang-select { padding-right: 26px; background-position: right 8px center; }
+    @media (max-width: 1450px) { .picker > span:first-child { display: none; } }
+    @media (max-width: 1200px) { .bar { gap: 8px 10px; } .bar .backend { display: none; } button.toggle { padding: 0 11px; } .bar h1 { display: none; } }
+    @media (max-width: 1450px) {
+      .source-select { max-width: 160px; }
+      #status { max-width: 150px; }
+      /* nur die Flagge zeigen; die Namen stehen im aufgeklappten Menü */
+      .lang-select { width: 64px; }
+    }
     .swatch { width: 18px; height: 18px; border-radius: 5px; flex: 0 0 auto; }
     .backend { color: var(--muted); font-size: .72rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
@@ -121,6 +129,28 @@
     }
     #visual, #visual-b, #visual-gpu { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
     .vis-stage { background: #000; }
+    .caption {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 6%;
+      z-index: 2;
+      width: fit-content;
+      max-width: min(90%, 900px);
+      margin: 0 auto;
+      padding: 10px 22px;
+      border-radius: 14px;
+      background: rgba(6, 4, 14, .55);
+      color: #fff;
+      font-size: clamp(1.1rem, 2.6vw, 1.9rem);
+      font-weight: 300;
+      letter-spacing: .01em;
+      text-align: center;
+      opacity: 0;
+      transition: opacity 1.4s ease;
+      pointer-events: none;
+    }
+    .caption.visible { opacity: 1; }
     button.toggle { background: #232b38; color: #c9d2df; border: 1px solid var(--line); }
     button.toggle[aria-pressed="true"] { background: var(--accent); color: #102019; border-color: transparent; }
     #visual-gpu[hidden] { display: none; }
@@ -140,24 +170,27 @@
   <main>
     <header class="bar">
       <h1>LichtOrgel</h1>
-      <label class="picker"><span>Quelle</span><select id="source" class="source-select" aria-label="Audioquelle"></select></label>
-      <button id="toggle" type="button" title="Das Audiosignal wird nur lokal im Browser verarbeitet.">Start</button>
+      <label class="picker"><span data-i18n="source">Quelle</span><select id="source" class="source-select" data-i18n-aria="ariaSource" aria-label="Audioquelle"></select></label>
+      <button id="toggle" type="button" data-i18n-title="tipStart" title="Das Audiosignal wird nur lokal im Browser verarbeitet.">Start</button>
       <div class="status-wrap">
         <span class="status-dot" id="status-dot" aria-hidden="true"></span>
         <span id="status" role="status" aria-live="polite">Nicht aktiv</span>
       </div>
       <div class="pickers">
-        <button id="auto" class="toggle" type="button" aria-pressed="false" title="Geht der Reihe nach durch alle Animationen (Wechsel alle 20 s auf dem nächsten Bass-Schlag, mit Überblendung) und alle 12 s fließend zum nächsten Farbthema">Auto</button>
-        <label class="picker"><span>Animation</span><select id="mode-switch" aria-label="Animation"></select></label>
-        <label class="picker"><span>Thema</span><span class="swatch" id="theme-swatch" aria-hidden="true"></span><select id="theme-switch" aria-label="Farbthema"></select></label>
+        <button id="auto" class="toggle" type="button" aria-pressed="false" data-i18n="auto" data-i18n-title="tipAuto" title="Geht der Reihe nach durch alle Animationen (Wechsel alle 20 s auf dem nächsten Bass-Schlag, mit Überblendung) und alle 12 s fließend zum nächsten Farbthema">Auto</button>
+        <button id="speech" class="toggle" type="button" aria-pressed="true" data-i18n="speech" data-i18n-title="tipSpeech" title="Spricht im Auto-Modus bei jedem Farbwechsel langsam einen psychedelischen Spruch (weibliche Stimme, zufällige Reihenfolge)">Stimme</button>
+        <select id="lang" class="lang-select" data-i18n-aria="ariaLang" aria-label="Sprache"></select>
+        <label class="picker"><span data-i18n="animation">Animation</span><select id="mode-switch" data-i18n-aria="animation" aria-label="Animation"></select></label>
+        <label class="picker"><span data-i18n="theme">Thema</span><span class="swatch" id="theme-swatch" aria-hidden="true"></span><select id="theme-switch" data-i18n-aria="ariaTheme" aria-label="Farbthema"></select></label>
         <span class="backend" id="backend">Canvas 2D</span>
       </div>
     </header>
 
-    <div class="vis-stage" id="vis-stage" aria-label="Klangvisualisierung">
+    <div class="vis-stage" id="vis-stage" data-i18n-aria="ariaStage" aria-label="Klangvisualisierung">
       <canvas id="visual" aria-hidden="true"></canvas>
       <canvas id="visual-b" aria-hidden="true"></canvas>
       <canvas id="visual-gpu" aria-hidden="true" hidden></canvas>
+      <p class="caption" id="caption" aria-live="polite"></p>
     </div>
   </main>
 
@@ -169,6 +202,97 @@
     const maxFrequency = 16000;
     const minDb = -90;
     const maxDb = -30;
+    // ---- Oberflächentexte (de/en/it); Auswahl über das Flaggenmenü, gemeinsam mit der Stimme ----
+    const uiText = {
+      de: {
+        source: "Quelle", animation: "Animation", theme: "Thema",
+        start: "Start", stop: "Stopp", auto: "Auto", speech: "Stimme",
+        ariaSource: "Audioquelle", ariaLang: "Sprache", ariaTheme: "Farbthema", ariaStage: "Klangvisualisierung",
+        tipStart: "Das Audiosignal wird nur lokal im Browser verarbeitet.",
+        tipAuto: "Geht der Reihe nach durch alle Animationen (Wechsel alle 20 s auf dem nächsten Bass-Schlag, mit Überblendung) und alle 12 s fließend zum nächsten Farbthema",
+        tipSpeech: "Spricht im Auto-Modus bei jedem Farbwechsel langsam einen psychedelischen Spruch (weibliche Stimme, zufällige Reihenfolge)",
+        srcDefault: "Mikrofon (Standard)", srcInput: (n) => `Eingang ${n}`, srcSystem: "Computer-Ton (Tab/Bildschirm teilen)",
+        idle: "Nicht aktiv", micActive: "Mikrofon aktiv", systemActive: "Computer-Ton aktiv",
+        micPrompt: "Mikrofonzugriff wird angefragt …", systemPrompt: "Tab oder Bildschirm wählen und „Audio teilen“ aktivieren …",
+        readyClick: "Mikrofon bereit – zum Starten irgendwo klicken", needsSecure: "Audiozugriff benötigt HTTPS oder localhost",
+        shareEnded: "Audio-Freigabe beendet", inputMuted: "Eingang vom System stummgeschaltet …",
+        reconnecting: (n) => `Eingang getrennt – verbinde neu (Versuch ${n}) …`,
+        deviceGone: "Gerät nicht mehr da – Standard-Mikrofon aktiv", inputLost: "Eingang verloren – bitte „Start“ drücken",
+        pressStartSystem: "„Start“ drücken, um Computer-Ton zu teilen",
+        errDeniedSystem: "Freigabe abgebrochen oder nicht erlaubt", errDeniedMic: "Mikrofonzugriff wurde nicht erlaubt",
+        errNotFound: "Kein Mikrofon gefunden", errBusy: "Eingang ist bereits anderweitig belegt",
+        errDevice: "Gewähltes Eingabegerät ist nicht verfügbar", errNoAudio: "Kein Ton freigegeben – beim Teilen „Audio teilen“ aktivieren",
+        errUnsupported: "Dieser Browser kann keinen Computer-Ton aufnehmen", errGeneric: "Audio konnte nicht gestartet werden",
+        groupInputs: "Eingänge", groupMusic: "Psychedelische Musik", srcFile: "Eigene Musikdatei …",
+        musicConnecting: (n) => `Verbinde mit ${n} …`, musicPlaying: (n) => `♪ ${n}`,
+        errStream: (n) => `${n} nicht abspielbar`, clickToPlay: "Zum Abspielen irgendwo klicken",
+        modes: {},
+        themes: {}
+      },
+      en: {
+        source: "Source", animation: "Animation", theme: "Theme",
+        start: "Start", stop: "Stop", auto: "Auto", speech: "Voice",
+        ariaSource: "Audio source", ariaLang: "Language", ariaTheme: "Color theme", ariaStage: "Sound visualization",
+        tipStart: "The audio signal is processed only locally in your browser.",
+        tipAuto: "Steps through all animations in order (a change every 20 s on the next bass beat, with crossfade) and blends to the next color theme every 12 s",
+        tipSpeech: "In auto mode, slowly speaks a psychedelic phrase on every color change (female voice, random order)",
+        srcDefault: "Microphone (default)", srcInput: (n) => `Input ${n}`, srcSystem: "Computer sound (share tab/screen)",
+        idle: "Not active", micActive: "Microphone on", systemActive: "Computer sound on",
+        micPrompt: "Requesting microphone access …", systemPrompt: "Choose a tab or screen and enable “Share audio” …",
+        readyClick: "Microphone ready – click anywhere to start", needsSecure: "Audio access requires HTTPS or localhost",
+        shareEnded: "Audio sharing ended", inputMuted: "Input muted by the system …",
+        reconnecting: (n) => `Input disconnected – reconnecting (attempt ${n}) …`,
+        deviceGone: "Device gone – default microphone on", inputLost: "Input lost – please press “Start”",
+        pressStartSystem: "Press “Start” to share computer sound",
+        errDeniedSystem: "Sharing cancelled or not allowed", errDeniedMic: "Microphone access was denied",
+        errNotFound: "No microphone found", errBusy: "Input is already in use",
+        errDevice: "Selected input device is not available", errNoAudio: "No audio shared – enable “Share audio” when sharing",
+        errUnsupported: "This browser cannot capture computer sound", errGeneric: "Audio could not be started",
+        groupInputs: "Inputs", groupMusic: "Psychedelic music", srcFile: "Own music file …",
+        musicConnecting: (n) => `Connecting to ${n} …`, musicPlaying: (n) => `♪ ${n}`,
+        errStream: (n) => `${n} cannot be played`, clickToPlay: "Click anywhere to play",
+        modes: { Kreis: "Circle", Welle: "Wave", Oszilloskop: "Oscilloscope", Partikel: "Particles", Wasserfall: "Waterfall",
+          "Blüte": "Blossom", Sternflug: "Starflight", Galaxie: "Galaxy", Kaleidoskop: "Kaleidoscope", Blitze: "Lightning" },
+        themes: { Glut: "Ember", Ozean: "Ocean" }
+      },
+      it: {
+        source: "Sorgente", animation: "Animazione", theme: "Tema",
+        start: "Avvia", stop: "Stop", auto: "Auto", speech: "Voce",
+        ariaSource: "Sorgente audio", ariaLang: "Lingua", ariaTheme: "Tema colori", ariaStage: "Visualizzazione del suono",
+        tipStart: "Il segnale audio viene elaborato solo localmente nel browser.",
+        tipAuto: "Passa in ordine attraverso tutte le animazioni (cambio ogni 20 s sul colpo di basso successivo, con dissolvenza) e ogni 12 s sfuma al tema colori successivo",
+        tipSpeech: "In modalità auto pronuncia lentamente una frase psichedelica a ogni cambio di colore (voce femminile, ordine casuale)",
+        srcDefault: "Microfono (predefinito)", srcInput: (n) => `Ingresso ${n}`, srcSystem: "Audio del computer (condividi scheda/schermo)",
+        idle: "Non attivo", micActive: "Microfono attivo", systemActive: "Audio del computer attivo",
+        micPrompt: "Richiesta di accesso al microfono …", systemPrompt: "Scegli una scheda o lo schermo e attiva “Condividi audio” …",
+        readyClick: "Microfono pronto – clicca ovunque per iniziare", needsSecure: "L'accesso audio richiede HTTPS o localhost",
+        shareEnded: "Condivisione audio terminata", inputMuted: "Ingresso silenziato dal sistema …",
+        reconnecting: (n) => `Ingresso scollegato – riconnessione (tentativo ${n}) …`,
+        deviceGone: "Dispositivo non più presente – microfono predefinito attivo", inputLost: "Ingresso perso – premi “Avvia”",
+        pressStartSystem: "Premi “Avvia” per condividere l'audio del computer",
+        errDeniedSystem: "Condivisione annullata o non consentita", errDeniedMic: "Accesso al microfono negato",
+        errNotFound: "Nessun microfono trovato", errBusy: "L'ingresso è già in uso",
+        errDevice: "Il dispositivo di ingresso scelto non è disponibile", errNoAudio: "Nessun audio condiviso – attiva “Condividi audio”",
+        errUnsupported: "Questo browser non può registrare l'audio del computer", errGeneric: "Impossibile avviare l'audio",
+        groupInputs: "Ingressi", groupMusic: "Musica psichedelica", srcFile: "File musicale …",
+        musicConnecting: (n) => `Connessione a ${n} …`, musicPlaying: (n) => `♪ ${n}`,
+        errStream: (n) => `Impossibile riprodurre ${n}`, clickToPlay: "Clicca ovunque per ascoltare",
+        modes: { Kreis: "Cerchio", Welle: "Onda", Oszilloskop: "Oscilloscopio", Partikel: "Particelle", Wasserfall: "Cascata",
+          "Blüte": "Fiore", Sternflug: "Volo stellare", Galaxie: "Galassia", Kaleidoskop: "Caleidoscopio", Terrain: "Terreno", Blitze: "Fulmini" },
+        themes: { Glut: "Brace", Ozean: "Oceano" }
+      }
+    };
+    const browserLang = (navigator.language || "de").slice(0, 2);
+    let uiLang = loadSetting("lichtorgel-lang", (v) => v in uiText, browserLang in uiText ? browserLang : "de");
+    let statusState = { key: "idle", args: [], active: false };
+
+    function tr(key, ...args) {
+      const value = uiText[uiLang][key] ?? uiText.de[key] ?? key;
+      return typeof value === "function" ? value(...args) : value;
+    }
+    const modeLabel = (name) => uiText[uiLang].modes[name] ?? name;
+    const themeLabel = (name) => uiText[uiLang].themes[name] ?? name;
+
     const toggleButton = document.querySelector("#toggle");
     const statusText = document.querySelector("#status");
     const statusDot = document.querySelector("#status-dot");
@@ -1076,7 +1200,7 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
       if (!gpu && want !== "off") {
         try { gpu = initWebGL(); } catch (error) { console.warn("WebGL2 nicht nutzbar:", error); freshGpuCanvas(); gpu = null; }
       }
-      for (const o of modeSwitch.options) o.textContent = o.value + (gpu && gpuShaders[o.value] ? " · GPU" : "");
+      relabelMenus();
       resizeVisual();
     }
 
@@ -1113,6 +1237,11 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
 
     let themeName = loadSetting("lichtorgel-theme", (v) => v in themes, "Neon");
     let modeName = loadSetting("lichtorgel-mode", (v) => v in modes, "Kreis");
+
+    function relabelMenus() {
+      for (const o of modeSwitch.options) o.textContent = modeLabel(o.value) + (gpu && gpuShaders[o.value] ? " · GPU" : "");
+      for (const o of themeSwitch.options) o.textContent = themeLabel(o.value);
+    }
 
     function makeSwitch(select, names, onPick) {
       for (const name of names) select.add(new Option(name, name));
@@ -1174,6 +1303,7 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
       autoNextMode = 0;
       autoButton.setAttribute("aria-pressed", String(on));
       saveSetting("lichtorgel-auto", on ? "1" : "0");
+      if (!on) stopSpeech();
     }
 
     function autoStep(now, beat) {
@@ -1190,11 +1320,248 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
       if (now >= autoNextTheme) {
         autoNextTheme = now + autoThemeMs;
         blendToTheme(nextName(Object.keys(themes), themeName));
+        speakNext();
       }
     }
 
-    autoButton.addEventListener("click", () => setAuto(!autoOn));
-    setAuto(autoOn);
+    autoButton.addEventListener("click", () => {
+      setAuto(!autoOn);
+      speakNext();
+    });
+
+    // ---- Stimme im Auto-Modus: bei jedem Farbwechsel ein Spruch, zufällige Reihenfolge ----
+    const languages = {
+      de: {
+        label: "🇩🇪 Deutsch",
+        // Weibliche Stimmen in Vorzugsreihenfolge (macOS, Chrome, Windows)
+        voices: [/petra/i, /anna/i, /google deutsch/i, /katja/i, /hedda/i, /marlene/i, /vicki/i, /sandy/i, /shelley/i, /female|weiblich/i],
+        sayings: [
+          "Die Farben hören dir zu.",
+          "Atme ein. Und das Licht atmet mit.",
+          "Jeder Ton ist ein Fenster.",
+          "Du bist die Welle, nicht das Wasser.",
+          "Die Zeit ist heute ein Kaleidoskop.",
+          "Lass die Gedanken schmelzen wie Wachs in der Sonne.",
+          "Hinter jeder Farbe wartet eine weitere.",
+          "Der Bass ist dein zweiter Herzschlag.",
+          "Alles fließt. Auch du.",
+          "Die Muster kennen deinen Namen.",
+          "Schließe die Augen. Die Farben bleiben.",
+          "Du tanzt im Inneren eines Regenbogens.",
+          "Die Stille zwischen den Tönen leuchtet am hellsten.",
+          "Jeder Kreis ist ein Anfang.",
+          "Das Universum summt in deiner Tonart.",
+          "Lass los. Das Licht trägt dich.",
+          "Die Wände atmen. Und das ist in Ordnung.",
+          "Du bist Sternenstaub mit offenen Ohren.",
+          "Die Spirale führt nach innen.",
+          "Jede Farbe hat einen Klang. Jeder Klang hat eine Farbe.",
+          "Der Moment dehnt sich wie Honig.",
+          "Folge dem Leuchten.",
+          "Die Diamanten am Himmel blinzeln dir zu.",
+          "Du bist genau da, wo die Musik dich braucht.",
+          "Gedanken sind nur Wolken aus Licht.",
+          "Das Muster wiederholt sich. Und ist doch jedes Mal neu.",
+          "Höre mit den Augen. Sieh mit den Ohren.",
+          "Die Welt ist weicher, als sie scheint.",
+          "Alles ist verbunden. Ton für Ton.",
+          "Schwebe. Der Boden wartet geduldig.",
+          "Wenn die Musik endet, bleibt das Leuchten."
+        ]
+      },
+      en: {
+        label: "🇬🇧 English",
+        voices: [/samantha/i, /matilda/i, /fiona/i, /karen/i, /moira/i, /tessa/i, /kathy/i, /google us english/i, /google uk english female/i, /jenny|aria|zira/i, /sandy/i, /shelley/i, /female/i],
+        sayings: [
+          "The colors are listening to you.",
+          "Breathe in. And the light breathes with you.",
+          "Every sound is a window.",
+          "You are the wave, not the water.",
+          "Today, time is a kaleidoscope.",
+          "Let your thoughts melt like wax in the sun.",
+          "Behind every color, another one is waiting.",
+          "The bass is your second heartbeat.",
+          "Everything flows. You too.",
+          "The patterns know your name.",
+          "Close your eyes. The colors stay.",
+          "You are dancing inside a rainbow.",
+          "The silence between the notes shines the brightest.",
+          "Every circle is a beginning.",
+          "The universe hums in your key.",
+          "Let go. The light will carry you.",
+          "The walls are breathing. And that's alright.",
+          "You are stardust with open ears.",
+          "The spiral leads inward.",
+          "Every color has a sound. Every sound has a color.",
+          "The moment stretches like honey.",
+          "Follow the glow.",
+          "The diamonds in the sky are winking at you.",
+          "You are exactly where the music needs you.",
+          "Thoughts are only clouds of light.",
+          "The pattern repeats. And yet it is new every time.",
+          "Listen with your eyes. See with your ears.",
+          "The world is softer than it seems.",
+          "Everything is connected. Note by note.",
+          "Float. The ground is waiting patiently.",
+          "When the music ends, the glow remains."
+        ]
+      },
+      it: {
+        label: "🇮🇹 Italiano",
+        voices: [/alice/i, /paola/i, /federica/i, /google italiano/i, /elsa|isabella/i, /sandy/i, /shelley/i, /female|femminile/i],
+        sayings: [
+          "I colori ti stanno ascoltando.",
+          "Inspira. E la luce respira con te.",
+          "Ogni suono è una finestra.",
+          "Tu sei l'onda, non l'acqua.",
+          "Oggi il tempo è un caleidoscopio.",
+          "Lascia che i pensieri si sciolgano come cera al sole.",
+          "Dietro ogni colore ne aspetta un altro.",
+          "Il basso è il tuo secondo battito del cuore.",
+          "Tutto scorre. Anche tu.",
+          "I disegni conoscono il tuo nome.",
+          "Chiudi gli occhi. I colori restano.",
+          "Stai danzando dentro un arcobaleno.",
+          "Il silenzio tra le note brilla più di tutto.",
+          "Ogni cerchio è un inizio.",
+          "L'universo canticchia nella tua tonalità.",
+          "Lasciati andare. La luce ti porta.",
+          "Le pareti respirano. E va bene così.",
+          "Sei polvere di stelle con le orecchie aperte.",
+          "La spirale porta verso l'interno.",
+          "Ogni colore ha un suono. Ogni suono ha un colore.",
+          "L'attimo si allunga come il miele.",
+          "Segui il bagliore.",
+          "I diamanti nel cielo ti fanno l'occhiolino.",
+          "Sei esattamente dove la musica ha bisogno di te.",
+          "I pensieri sono solo nuvole di luce.",
+          "Il disegno si ripete. Eppure ogni volta è nuovo.",
+          "Ascolta con gli occhi. Guarda con le orecchie.",
+          "Il mondo è più morbido di quanto sembri.",
+          "Tutto è collegato. Nota dopo nota.",
+          "Fluttua. Il pavimento aspetta paziente.",
+          "Quando la musica finisce, resta il bagliore."
+        ]
+      }
+    };
+    const speechSupported = "speechSynthesis" in window;
+    const speechButton = document.querySelector("#speech");
+    const langSelect = document.querySelector("#lang");
+    const caption = document.querySelector("#caption");
+    let speechOn = loadSetting("lichtorgel-speech", (v) => v === "1" || v === "0", "1") === "1";
+    let speechLang = uiLang;
+    let sayingQueue = [];
+    let speechVoice = null;
+
+    function pickVoice(lang) {
+      const voices = speechSynthesis.getVoices().filter((v) => v.lang.toLowerCase().startsWith(lang));
+      for (const pattern of languages[lang].voices) {
+        // Premium-/Enhanced-Varianten klingen natürlicher und werden bevorzugt
+        const matches = voices.filter((v) => pattern.test(v.name));
+        const best = matches.find((v) => /premium|enhanced|natural/i.test(v.name)) ?? matches[0];
+        if (best) return best;
+      }
+      return voices[0] ?? null;
+    }
+
+    function shuffled(list) {
+      const copy = [...list];
+      for (let i = copy.length - 1; i > 0; i -= 1) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [copy[i], copy[j]] = [copy[j], copy[i]];
+      }
+      return copy;
+    }
+
+    function speakNext() {
+      if (!speechSupported || !speechOn || !autoOn || !analyser || speechSynthesis.speaking) return;
+      if (sayingQueue.length === 0) sayingQueue = shuffled(languages[speechLang].sayings);
+      const text = sayingQueue.pop();
+      const utterance = new SpeechSynthesisUtterance(text);
+      speechVoice ??= pickVoice(speechLang);
+      if (speechVoice) utterance.voice = speechVoice;
+      utterance.lang = speechVoice?.lang ?? speechLang;
+      utterance.rate = 0.72;
+      utterance.pitch = 1.05;
+      utterance.volume = 1;
+      utterance.onstart = () => {
+        caption.textContent = text;
+        caption.classList.add("visible");
+        duckMusic(true);
+      };
+      utterance.onend = utterance.onerror = () => {
+        caption.classList.remove("visible");
+        duckMusic(false);
+      };
+      speechSynthesis.speak(utterance);
+    }
+
+    // Musik (Radio/Datei) während der Stimme weich absenken, danach wieder hochfahren
+    const duckLevel = 0.25;
+    function duckMusic(on) {
+      if (!musicGain || !audioContext) return;
+      const gain = musicGain.gain;
+      gain.cancelScheduledValues(audioContext.currentTime);
+      gain.setTargetAtTime(on ? duckLevel : 1, audioContext.currentTime, on ? 0.25 : 0.8);
+    }
+
+    function stopSpeech() {
+      if (speechSupported) speechSynthesis.cancel();
+      caption.classList.remove("visible");
+      duckMusic(false);
+    }
+
+    function setSpeech(on) {
+      speechOn = on;
+      speechButton.setAttribute("aria-pressed", String(on));
+      saveSetting("lichtorgel-speech", on ? "1" : "0");
+      if (!on) stopSpeech();
+    }
+
+    // Eine Sprache für Stimme und Oberfläche
+    function applyUiLang(lang) {
+      uiLang = lang;
+      document.documentElement.lang = lang;
+      for (const el of document.querySelectorAll("[data-i18n]")) el.textContent = tr(el.dataset.i18n);
+      for (const el of document.querySelectorAll("[data-i18n-title]")) el.title = tr(el.dataset.i18nTitle);
+      for (const el of document.querySelectorAll("[data-i18n-aria]")) el.setAttribute("aria-label", tr(el.dataset.i18nAria));
+      toggleButton.textContent = tr(stream ? "stop" : "start");
+      relabelMenus();
+      fillSources(lastDevices);
+      setStatus(statusState.key, statusState.active, ...statusState.args);
+    }
+
+    function setSpeechLang(lang) {
+      speechLang = lang;
+      applyUiLang(lang);
+      langSelect.value = lang;
+      saveSetting("lichtorgel-lang", lang);
+      sayingQueue = [];
+      speechVoice = null;
+      stopSpeech();
+    }
+
+    if (speechSupported) {
+      for (const [code, { label }] of Object.entries(languages)) langSelect.add(new Option(label, code));
+      langSelect.addEventListener("change", () => {
+        setSpeechLang(langSelect.value);
+        speakNext();
+      });
+      speechSynthesis.addEventListener?.("voiceschanged", () => { speechVoice = pickVoice(speechLang); });
+      speechButton.addEventListener("click", () => {
+        setSpeech(!speechOn);
+        speakNext();
+      });
+      setSpeech(speechOn);
+      langSelect.value = speechLang;
+    } else {
+      speechButton.hidden = true;
+      for (const [code, { label }] of Object.entries(languages)) langSelect.add(new Option(label, code));
+      langSelect.addEventListener("change", () => setSpeechLang(langSelect.value));
+      langSelect.value = speechLang;
+    }
+    // Die Seite startet immer im Auto-Modus
+    setAuto(true);
 
     function applyTheme(name) {
       themeName = name;
@@ -1291,7 +1658,7 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
 
     // Manuelle Wahl setzt den Auto-Zeitplan zurück; auch sie wird überblendet
     makeSwitch(modeSwitch, Object.keys(modes), (name) => { autoNextMode = 0; transitionTo(name); });
-    makeSwitch(themeSwitch, Object.keys(themes), (name) => { autoNextMode = 0; blendToTheme(name); });
+    makeSwitch(themeSwitch, Object.keys(themes), (name) => { autoNextMode = 0; blendToTheme(name); speakNext(); });
 
     function resizeVisual() {
       const ratio = window.devicePixelRatio || 1;
@@ -1363,8 +1730,11 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
     resizeVisual();
     void initGpu();
 
-    function setStatus(message, active = false) {
-      statusText.textContent = message;
+    // Status als Schlüssel merken, damit ein Sprachwechsel ihn neu übersetzen kann
+    function setStatus(key, active = false, ...args) {
+      statusState = { key, args, active };
+      statusText.textContent = tr(key, ...args);
+      statusText.title = statusText.textContent;
       statusDot.classList.toggle("active", active);
     }
 
@@ -1376,17 +1746,43 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
     const systemOffsetDb = -20;
     let levelOffsetDb = 0;
 
-    function fillSources(devices = []) {
+    // Psychedelische Musik: SomaFM-Sender (hörerfinanziert; CORS erlaubt die Analyse) und eigene Dateien
+    const radioStations = [
+      { id: "thetrip", name: "The Trip", genre: "Progressive · Trance" },
+      { id: "suburbsofgoa", name: "Suburbs of Goa", genre: "Goa · Asian Beats" },
+      { id: "spacestation", name: "Space Station Soma", genre: "Space-Electronica" },
+      { id: "deepspaceone", name: "Deep Space One", genre: "Deep Ambient" },
+      { id: "dronezone", name: "Drone Zone", genre: "Ambient-Drones" },
+      { id: "synphaera", name: "Synphaera", genre: "Space Ambient" }
+    ];
+    const fileSource = "file";
+    const fileInput = Object.assign(document.createElement("input"), { type: "file", accept: "audio/*", hidden: true });
+    document.body.append(fileInput);
+    let player;
+    let musicGain;
+    let fileUrl;
+    let fileName;
+    const stationFor = (value) => radioStations.find((s) => `radio:${s.id}` === value);
+    const isMusicSource = (value) => Boolean(stationFor(value)) || value === fileSource;
+
+    let lastDevices = [];
+    function fillSources(devices = lastDevices) {
+      lastDevices = devices;
       const wanted = sourceSelect.value || loadSetting("lichtorgel-source", () => true, "default");
-      sourceSelect.replaceChildren(new Option("Mikrofon (Standard)", "default"));
+      const inputs = Object.assign(document.createElement("optgroup"), { label: tr("groupInputs") });
+      inputs.append(new Option(tr("srcDefault"), "default"));
       for (const device of devices) {
         // Ohne Freigabe liefern Browser leere IDs/Namen; "default"/"communications" sind Aliase
         if (device.kind !== "audioinput" || !device.deviceId || ["default", "communications"].includes(device.deviceId)) continue;
-        sourceSelect.add(new Option(device.label || `Eingang ${sourceSelect.options.length}`, device.deviceId));
+        inputs.append(new Option(device.label || tr("srcInput", inputs.children.length), device.deviceId));
       }
       if (navigator.mediaDevices?.getDisplayMedia) {
-        sourceSelect.add(new Option("Computer-Ton (Tab/Bildschirm teilen)", systemSource));
+        inputs.append(new Option(tr("srcSystem"), systemSource));
       }
+      const music = Object.assign(document.createElement("optgroup"), { label: tr("groupMusic") });
+      for (const station of radioStations) music.append(new Option(`${station.name} – ${station.genre}`, `radio:${station.id}`));
+      music.append(new Option(fileName ? `♪ ${fileName}` : tr("srcFile"), fileSource));
+      sourceSelect.replaceChildren(inputs, music);
       const exists = [...sourceSelect.options].some((o) => o.value === wanted);
       sourceSelect.value = exists ? wanted : "default";
     }
@@ -1432,23 +1828,23 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
         console.warn("Audiospur beendet:", track.label);
         if (isSystem) {
           stopAudio();
-          setStatus("Audio-Freigabe beendet");
+          setStatus("shareEnded");
         } else {
           void reconnect(source, ++reconnectToken);
         }
       });
       track.addEventListener("mute", () => {
-        if (stream?.getAudioTracks()[0] === track) setStatus("Eingang vom System stummgeschaltet …", true);
+        if (stream?.getAudioTracks()[0] === track) setStatus("inputMuted", true);
       });
       track.addEventListener("unmute", () => {
-        if (stream?.getAudioTracks()[0] === track) setStatus(isSystem ? "Computer-Ton aktiv" : "Mikrofon aktiv", true);
+        if (stream?.getAudioTracks()[0] === track) setStatus(isSystem ? "systemActive" : "micActive", true);
       });
     }
 
     async function reconnect(source, token) {
       stopAudio();
       for (let attempt = 1; attempt <= 6; attempt += 1) {
-        setStatus(`Eingang getrennt – verbinde neu (Versuch ${attempt}) …`);
+        setStatus("reconnecting", false, attempt);
         await new Promise((resolve) => setTimeout(resolve, 400 * attempt));
         if (token !== reconnectToken || stream) return;
         // Ist das gewählte Gerät verschwunden, auf das Standard-Mikrofon ausweichen
@@ -1457,17 +1853,25 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
         sourceSelect.value = exists ? source : "default";
         await startAudio();
         if (stream) {
-          if (!exists) setStatus("Gerät nicht mehr da – Standard-Mikrofon aktiv", true);
+          if (!exists) setStatus("deviceGone", true);
           return;
         }
       }
-      setStatus("Eingang verloren – bitte „Start“ drücken");
+      setStatus("inputLost");
     }
 
     function stopAudio() {
       cancelAnimationFrame(animationFrame);
+      stopSpeech();
       stream?.getTracks().forEach((track) => track.stop());
       stream = undefined;
+      musicGain = undefined;
+      if (player) {
+        player.pause();
+        player.removeAttribute("src");
+        player.load();
+        player = undefined;
+      }
       sourceNode = undefined;
       analyser = undefined;
       if (audioContext && audioContext.state !== "closed") {
@@ -1476,10 +1880,10 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
       audioContext = undefined;
       visLevels.fill(0);
       drawVisual();
-      toggleButton.textContent = "Start";
+      toggleButton.textContent = tr("start");
       toggleButton.classList.remove("stop");
       toggleButton.disabled = false;
-      setStatus("Nicht aktiv");
+      setStatus("idle");
     }
 
     // Ein Fehler in einem einzelnen Frame darf die Schleife nicht beenden
@@ -1524,16 +1928,64 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
       drawVisual(levels);
     }
 
+    async function startMusic(source) {
+      const station = stationFor(source);
+      if (!station && !fileUrl) {
+        fileInput.click();
+        return;
+      }
+      const name = station ? station.name : fileName;
+      toggleButton.disabled = true;
+      setStatus("musicConnecting", false, name);
+      try {
+        audioContext = new AudioContext({ latencyHint: "interactive" });
+        const current = new Audio();
+        player = current;
+        current.crossOrigin = "anonymous";
+        current.src = station ? `https://ice1.somafm.com/${station.id}-128-mp3` : fileUrl;
+        current.loop = !station;
+        current.addEventListener("playing", () => { if (player === current) setStatus("musicPlaying", true, name); });
+        current.addEventListener("waiting", () => { if (player === current) setStatus("musicConnecting", true, name); });
+        current.addEventListener("error", () => {
+          if (player !== current) return;
+          stopAudio();
+          setStatus("errStream", false, name);
+        });
+        // Musik geht durch den Analyser hörbar auf die Lautsprecher
+        sourceNode = audioContext.createMediaElementSource(current);
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = 1024;
+        analyser.smoothingTimeConstant = 0;
+        sourceNode.connect(analyser);
+        // Lautstärke hinter dem Analyser: Absenken für die Stimme ändert die Visualisierung nicht
+        musicGain = audioContext.createGain();
+        analyser.connect(musicGain).connect(audioContext.destination);
+        levelOffsetDb = systemOffsetDb;
+        stream = new MediaStream(); // leerer Merker „Audio läuft“ für Start/Stopp und Auto-Modus
+        await Promise.race([audioContext.resume(), new Promise((resolve) => setTimeout(resolve, 300))]);
+        await current.play();
+        toggleButton.textContent = tr("stop");
+        toggleButton.classList.add("stop");
+        toggleButton.disabled = false;
+        drawLevels();
+      } catch (error) {
+        stopAudio();
+        // Ohne vorherige Interaktion verweigert der Browser die Wiedergabe
+        setStatus(error.name === "NotAllowedError" ? "clickToPlay" : "errStream", false, name);
+      }
+    }
+
     async function startAudio() {
       const source = sourceSelect.value;
+      if (isMusicSource(source)) return startMusic(source);
       const isSystem = source === systemSource;
       if (!navigator.mediaDevices?.getUserMedia) {
-        setStatus("Audiozugriff benötigt HTTPS oder localhost");
+        setStatus("needsSecure");
         return;
       }
 
       toggleButton.disabled = true;
-      setStatus(isSystem ? "Tab oder Bildschirm wählen und „Audio teilen“ aktivieren …" : "Mikrofonzugriff wird angefragt …");
+      setStatus(isSystem ? "systemPrompt" : "micPrompt");
 
       try {
         stream = await openStream(source);
@@ -1554,25 +2006,26 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
         analyser.smoothingTimeConstant = 0;
         sourceNode.connect(analyser);
 
-        await audioContext.resume();
-        toggleButton.textContent = "Stopp";
+        // Ohne Nutzergeste bleibt resume() hängen; nicht darauf warten (siehe waitForGesture)
+        await Promise.race([audioContext.resume(), new Promise((resolve) => setTimeout(resolve, 300))]);
+        toggleButton.textContent = tr("stop");
         toggleButton.classList.add("stop");
         toggleButton.disabled = false;
-        setStatus(isSystem ? "Computer-Ton aktiv" : "Mikrofon aktiv", true);
+        setStatus(isSystem ? "systemActive" : "micActive", true);
         // Gerätenamen sind erst nach einer Mikrofonfreigabe lesbar
         if (!isSystem) void refreshSources();
         drawLevels();
       } catch (error) {
         stopAudio();
         const messages = {
-          NotAllowedError: isSystem ? "Freigabe abgebrochen oder nicht erlaubt" : "Mikrofonzugriff wurde nicht erlaubt",
-          NotFoundError: "Kein Mikrofon gefunden",
-          NotReadableError: "Eingang ist bereits anderweitig belegt",
-          OverconstrainedError: "Gewähltes Eingabegerät ist nicht verfügbar",
-          NoAudioError: "Kein Ton freigegeben – beim Teilen „Audio teilen“ aktivieren",
-          NotSupportedError: "Dieser Browser kann keinen Computer-Ton aufnehmen"
+          NotAllowedError: isSystem ? "errDeniedSystem" : "errDeniedMic",
+          NotFoundError: "errNotFound",
+          NotReadableError: "errBusy",
+          OverconstrainedError: "errDevice",
+          NoAudioError: "errNoAudio",
+          NotSupportedError: "errUnsupported"
         };
-        setStatus(messages[error.name] ?? "Audio konnte nicht gestartet werden");
+        setStatus(messages[error.name] ?? "errGeneric");
       }
     }
 
@@ -1588,18 +2041,89 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
     sourceSelect.addEventListener("change", () => {
       saveSetting("lichtorgel-source", sourceSelect.value);
       reconnectToken += 1;
+      if (sourceSelect.value === fileSource) {
+        fileInput.click();
+        return;
+      }
       if (!stream) return;
       stopAudio();
       // Bildschirmfreigabe braucht einen eigenen Klick; Mikrofone direkt neu starten
       if (sourceSelect.value === systemSource) {
-        setStatus("„Start“ drücken, um Computer-Ton zu teilen");
+        setStatus("pressStartSystem");
       } else {
         void startAudio();
       }
     });
 
+    fileInput.addEventListener("change", () => {
+      const file = fileInput.files?.[0];
+      if (!file) return;
+      if (fileUrl) URL.revokeObjectURL(fileUrl);
+      fileUrl = URL.createObjectURL(file);
+      fileName = file.name.replace(/\.[^.]+$/, "");
+      fileInput.value = "";
+      fillSources();
+      sourceSelect.value = fileSource;
+      if (stream) stopAudio();
+      void startAudio();
+    });
+
     fillSources();
     void refreshSources();
+
+    // ---- Autostart: Mikrofon sofort einschalten ----
+    // Browser starten Ton und Sprachausgabe erst nach einer Interaktion. Bis dahin ist das
+    // Mikrofon verbunden; der erste Klick oder Tastendruck irgendwo gibt alles frei.
+    function waitForGesture() {
+      setStatus("readyClick", true);
+      const unlock = () => {
+        removeEventListener("pointerdown", unlock, true);
+        removeEventListener("keydown", unlock, true);
+        if (!audioContext) return;
+        void audioContext.resume().then(() => {
+          setStatus(levelOffsetDb ? "systemActive" : "micActive", true);
+          speakNext();
+        });
+      };
+      addEventListener("pointerdown", unlock, true);
+      addEventListener("keydown", unlock, true);
+    }
+
+    async function autostart() {
+      // Computer-Ton braucht immer einen Klick, beim Autostart daher das Mikrofon nehmen
+      if (sourceSelect.value === systemSource || sourceSelect.value === fileSource) sourceSelect.value = "default";
+      await startAudio();
+      if (!audioContext) {
+        // Musik ohne vorherige Interaktion: beim ersten Klick/Tastendruck starten
+        if (isMusicSource(sourceSelect.value)) {
+          const playOnGesture = () => {
+            removeEventListener("pointerdown", playOnGesture, true);
+            removeEventListener("keydown", playOnGesture, true);
+            if (!stream) void startAudio().then(() => speakNext());
+          };
+          addEventListener("pointerdown", playOnGesture, true);
+          addEventListener("keydown", playOnGesture, true);
+        }
+        return;
+      }
+      if (audioContext.state === "running") {
+        // Ton läuft schon (Mikrofonfreigabe erlaubt Audio), die Sprachausgabe kann aber bis
+        // zur ersten Interaktion gesperrt sein: dann beim ersten Klick/Tastendruck sprechen
+        speakNext();
+        const speakOnGesture = () => {
+          removeEventListener("pointerdown", speakOnGesture, true);
+          removeEventListener("keydown", speakOnGesture, true);
+          speakNext();
+        };
+        addEventListener("pointerdown", speakOnGesture, true);
+        addEventListener("keydown", speakOnGesture, true);
+      } else {
+        waitForGesture();
+      }
+    }
+    // Sprache erst hier anwenden: braucht Quellenmenü und Status, die weiter oben entstehen
+    applyUiLang(uiLang);
+    void autostart();
     navigator.mediaDevices?.addEventListener?.("devicechange", () => void refreshSources());
     // Zurück im Vordergrund: pausierten Kontext wieder anwerfen
     document.addEventListener("visibilitychange", () => {

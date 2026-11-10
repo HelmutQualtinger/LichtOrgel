@@ -2,7 +2,7 @@
 
 ![LichtOrgel – psychedelisches Regenbogen-Mandala mit funkelnden Diamanten und dem Schriftzug „Lucy in the Sky with Diamonds“](og-image.jpg)
 
-Eine Lichtorgel im Browser: Audio von Mikrofon oder Computer wird in zehn Frequenzbänder zerlegt und in Echtzeit als Animation dargestellt. Die gesamte Anwendung ist eine einzelne Datei (`index.html`) ohne Abhängigkeiten und ohne Build-Schritt.
+Eine Lichtorgel im Browser: Audio von Mikrofon, Computer, psychedelischem Internetradio oder einer eigenen Musikdatei wird in zehn Frequenzbänder zerlegt und in Echtzeit als Animation dargestellt. Oberfläche und Stimme gibt es auf Deutsch, Englisch und Italienisch. Die gesamte Anwendung ist eine einzelne Datei (`index.html`) ohne Abhängigkeiten und ohne Build-Schritt.
 
 **Live:** https://helmutqualtinger.github.io/LichtOrgel/
 
@@ -14,17 +14,19 @@ Browser erlauben Audiozugriff nur in einem sicheren Kontext (HTTPS oder `localho
 python3 -m http.server 8000
 ```
 
-Danach `http://localhost:8000` öffnen, eine Quelle wählen und **Start** drücken.
+Danach `http://localhost:8000` öffnen. Die Seite startet direkt im Auto-Modus mit eingeschaltetem Mikrofon. Browser geben Ton und Sprachausgabe teils erst nach einer Interaktion frei; dann genügt ein Klick irgendwo auf die Seite.
 
 ## Bedienung
 
-Alle Einstellungen befinden sich in der Kopfleiste und werden im Browser gespeichert.
+Alle Einstellungen befinden sich in der Kopfleiste und werden im Browser gespeichert (der Auto-Modus ist beim Laden immer an).
 
 | Element | Funktion |
 |---|---|
-| **Quelle** | Standard-Mikrofon, ein bestimmtes Eingabegerät oder Computer-Ton |
+| **Quelle** | Mikrofon, Eingabegerät, Computer-Ton, psychedelischer Radiosender oder eigene Musikdatei |
 | **Start / Stopp** | Audio ein- und ausschalten |
 | **Auto** | Geht automatisch der Reihe nach durch Effekte und Farbthemen |
+| **Stimme** | Im Auto-Modus spricht eine weibliche Stimme bei jedem Farbwechsel einen Spruch |
+| **Flaggenmenü** | Sprache von Oberfläche und Stimme: 🇩🇪 Deutsch, 🇬🇧 English, 🇮🇹 Italiano |
 | **Animation** | Effekt wählen (Wechsel mit Überblendung) |
 | **Thema** | Farbthema wählen (fließender Übergang) |
 
@@ -35,6 +37,9 @@ Rechts zeigt die Leiste das aktive Grafik-Backend und die Bildrate.
 - **Mikrofon** – Echounterdrückung, Rauschunterdrückung und automatische Verstärkung sind abgeschaltet, damit die Anzeige ohne Verzögerung und mit vollen Pegelspitzen reagiert.
 - **Eingabegerät** – jedes erkannte Audio-Eingabegerät. Die Namen erscheinen nach der ersten Mikrofonfreigabe. Ein Loopback-Gerät wie [BlackHole](https://github.com/ExistentialAudio/BlackHole) leitet den Computer-Ton in jedem Browser als Eingang weiter.
 - **Computer-Ton** – über die Bildschirm- bzw. Tab-Freigabe; im Dialog **„Audio teilen“** aktivieren. Nur Chrome und Edge; Systemton auf macOS erst in neueren Versionen, Tab-Ton immer. Das Signal wird um 20 dB abgesenkt, da es deutlich lauter ist als ein Mikrofon.
+
+- **Psychedelische Musik** – sechs Sender von [SomaFM](https://somafm.com), einem werbefreien, hörerfinanzierten Internetradio: The Trip (Progressive, Trance), Suburbs of Goa (Goa, Asian Beats), Space Station Soma (Space-Electronica), Deep Space One (Deep Ambient), Drone Zone (Ambient-Drones) und Synphaera (Space Ambient). Die Musik ist hörbar und steuert zugleich die Visualisierung.
+- **Eigene Musikdatei** – öffnet die Dateiauswahl; die Datei wird lokal im Browser abgespielt und in Schleife wiederholt.
 
 Trennt sich ein Mikrofon (Gerätewechsel, Bluetooth, Ruhezustand), verbindet die Seite automatisch neu und weicht bei Bedarf auf das Standard-Mikrofon aus.
 
@@ -67,6 +72,8 @@ Bei jedem Bass-Schlag hellt sich das Bild kurz auf.
 
 Im Auto-Modus wechselt der Effekt alle 20 Sekunden zum nächsten in Menüreihenfolge, jeweils auf dem nächsten Bass-Schlag. Für 2,5 Sekunden laufen alter und neuer Effekt gleichzeitig und werden überblendet. Das Farbthema wechselt alle 12 Sekunden mit einer Überblendung von 4 Sekunden. Der Auto-Modus läuft nur bei aktivem Audio.
 
+Mit eingeschalteter **Stimme** spricht eine weibliche Stimme bei jedem Farbwechsel langsam einen von 31 psychedelischen Sprüchen in der gewählten Sprache, eingeblendet als Untertitel. Die Reihenfolge ist zufällig; jeder Spruch kommt einmal, bevor neu gemischt wird. Verwendet wird die Sprachausgabe des Browsers; auf dem Mac bevorzugt „Petra (Premium)“ (Deutsch), „Samantha“ (Englisch) und „Alice“ (Italienisch).
+
 ## Grafik-Backends
 
 Die Seite wählt automatisch: **WebGPU** → **WebGL2** → **Canvas 2D**. Startet WebGPU nicht innerhalb von 4 Sekunden, wird WebGL2 verwendet. Ohne GPU-Unterstützung laufen alle Effekte als Canvas-2D-Varianten.
@@ -81,7 +88,7 @@ index.html?gpu=off
 
 ## Datenschutz
 
-Das Audiosignal wird ausschließlich lokal im Browser verarbeitet. Es werden keine Daten übertragen oder gespeichert, außer den Einstellungen im `localStorage` des Browsers.
+Das Audiosignal wird ausschließlich lokal im Browser verarbeitet. Es werden keine Daten übertragen oder gespeichert, außer den Einstellungen im `localStorage` des Browsers. Nur bei Wahl eines Radiosenders lädt der Browser den Stream direkt von SomaFM.
 
 ## Dateien
 
