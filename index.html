@@ -2,9 +2,17 @@
 <html lang="de">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#10141d">
   <title>LichtOrgel</title>
+  <!-- Installierbare App (PWA) für iOS und Android -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon-192.png" sizes="192x192">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="LichtOrgel">
   <meta name="description" content="Musik wird zu Licht – live im Browser. Mikrofon oder Computer-Ton, 14 Effekte, WebGPU.">
   <!-- Social-Media-Vorschau (absolute URLs, von Facebook, LinkedIn, X & Co. verlangt) -->
   <meta property="og:type" content="website">
@@ -47,7 +55,7 @@
       flex-direction: column;
       gap: 10px;
       height: 100dvh;
-      padding: 10px;
+      padding: max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
     }
 
     .bar {
@@ -114,7 +122,7 @@
       .source-select { max-width: 160px; }
       #status { max-width: 150px; }
       /* nur die Flagge zeigen; die Namen stehen im aufgeklappten Menü */
-      .lang-select { width: 64px; }
+      .lang-select { width: 56px; text-overflow: clip; }
     }
     .swatch { width: 18px; height: 18px; border-radius: 5px; flex: 0 0 auto; }
     .backend { color: var(--muted); font-size: .72rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -156,10 +164,11 @@
     #visual-gpu[hidden] { display: none; }
 
     @media (max-width: 640px) {
-      main { padding: 8px; gap: 8px; }
-      .pickers { width: 100%; margin-left: 0; }
+      main { gap: 8px; padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left)); }
+      .pickers { width: 100%; margin-left: 0; flex-wrap: wrap; }
       .source-select { max-width: 170px; }
-      .picker { flex: 1; min-width: 0; }
+      /* Animation und Thema bekommen auf dem Handy eine eigene Zeile */
+      .picker { flex: 1 1 140px; min-width: 0; }
       .picker select { flex: 1; min-width: 0; }
       .picker > span:first-child { display: none; }
       .backend { display: none; }
@@ -1672,14 +1681,17 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
     makeSwitch(modeSwitch, Object.keys(modes), (name) => { autoNextMode = 0; transitionTo(name); });
     makeSwitch(themeSwitch, Object.keys(themes), (name) => { autoNextMode = 0; blendToTheme(name); speakNext(); });
 
+    // Handys/Tablets: geringere Render-Auflösung lässt dem Audio-Thread genug Rechenzeit
+    const isMobile = matchMedia("(pointer: coarse)").matches;
+
     function resizeVisual() {
-      const ratio = window.devicePixelRatio || 1;
+      const ratio = Math.min(window.devicePixelRatio || 1, isMobile ? 1.5 : 3);
       for (const { canvas, ctx } of layers) {
         canvas.width = Math.round(canvas.clientWidth * ratio);
         canvas.height = Math.round(canvas.clientHeight * ratio);
         ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
       }
-      const gpuRatio = Math.min(ratio, 2);
+      const gpuRatio = Math.min(ratio, isMobile ? 1.25 : 2);
       gpuCanvas.width = Math.round(visCanvas.clientWidth * gpuRatio);
       gpuCanvas.height = Math.round(visCanvas.clientHeight * gpuRatio);
       particles.length = 0;
@@ -2254,7 +2266,8 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
       dry.connect(comp);
       // Hall: Impulsantwort aus abklingendem Rauschen
       const reverb = ctx.createConvolver();
-      const irLength = Math.round(ctx.sampleRate * 3.5);
+      // kürzerer Hall auf Handys: die Faltung ist der teuerste Teil der Klangerzeugung
+      const irLength = Math.round(ctx.sampleRate * (isMobile ? 1.8 : 3));
       const ir = ctx.createBuffer(2, irLength, ctx.sampleRate);
       for (let c = 0; c < 2; c += 1) {
         const data = ir.getChannelData(c);
@@ -2407,7 +2420,10 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
       let next = t0;
       // Vorausplanung auf der Audio-Uhr; im Hintergrund drosseln Browser Timer, daher weiter voraus
       const timer = setInterval(() => {
-        const horizon = ctx.currentTime + (document.hidden ? 1.5 : 0.2);
+        // Hing der Haupt-Thread (z. B. Grafik), nicht verspätete Noten nachholen: die würden abrupt
+        // einsetzen und knacken. Stattdessen kurz vor der Audio-Uhr neu ansetzen.
+        if (next < ctx.currentTime + 0.02) next = ctx.currentTime + 0.05;
+        const horizon = ctx.currentTime + (document.hidden ? 1.5 : 0.35);
         while (next < horizon) {
           preset.step(state, step, next, voice, stepDur);
           step += 1;
@@ -2430,7 +2446,7 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
       const name = tr(`synth_${id}`);
       toggleButton.disabled = true;
       try {
-        audioContext = new AudioContext({ latencyHint: "interactive" });
+        audioContext = new AudioContext({ latencyHint: "playback" }); // größere Puffer: keine Aussetzer auf Handys
         analyser = audioContext.createAnalyser();
         analyser.fftSize = 1024;
         analyser.smoothingTimeConstant = 0;
@@ -2482,7 +2498,7 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
       toggleButton.disabled = true;
       setStatus("musicConnecting", false, name);
       try {
-        audioContext = new AudioContext({ latencyHint: "interactive" });
+        audioContext = new AudioContext({ latencyHint: "playback" }); // größere Puffer: keine Aussetzer auf Handys
         const current = new Audio();
         player = current;
         current.src = fileUrl;
@@ -2666,6 +2682,11 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
     // Sprache erst hier anwenden: braucht Quellenmenü und Status, die weiter oben entstehen
     applyUiLang(uiLang);
     void autostart();
+
+    // Offline-Fähigkeit und Installation als App; nur über HTTPS (nicht lokal, um beim Entwickeln nicht zu cachen)
+    if ("serviceWorker" in navigator && location.protocol === "https:") {
+      navigator.serviceWorker.register("sw.js").catch((error) => console.warn("Service Worker:", error));
+    }
     navigator.mediaDevices?.addEventListener?.("devicechange", () => void refreshSources());
     // Zurück im Vordergrund: pausierten Kontext wieder anwerfen
     document.addEventListener("visibilitychange", () => {

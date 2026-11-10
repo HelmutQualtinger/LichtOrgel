@@ -1,0 +1,19 @@
+{
+  "name": "LichtOrgel",
+  "short_name": "LichtOrgel",
+  "description": "Psychedelische Lichtorgel: Synthesizer-Loops, Mikrofon oder eigene Musik als Live-Visualisierung mit 14 Effekten.",
+  "lang": "de",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "any",
+  "background_color": "#05030a",
+  "theme_color": "#10141d",
+  "categories": ["music", "entertainment"],
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

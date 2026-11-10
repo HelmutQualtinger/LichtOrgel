@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-LichtOrgel is a microphone-driven "light organ": a single self-contained file, `index.html` (HTML + CSS + JS, no build step, no dependencies, no package.json, no git). The UI text and code comments are in German; keep them German.
+LichtOrgel is an audio-driven "light organ": a single self-contained file, `index.html` (HTML + CSS + JS, no build step, no dependencies, no package.json), published via GitHub Pages (https://helmutqualtinger.github.io/LichtOrgel/, repo HelmutQualtinger/LichtOrgel). It is also an installable PWA: `manifest.webmanifest`, `sw.js` and the icons. The UI text and code comments are in German; keep them German.
 
 ## Running
 
@@ -66,6 +66,12 @@ Uniforms are one `vec4 u[10]` array (layout documented in the comment above `sha
 - Mode and theme keys stay German internally (saved settings, `gpuShaders`); `modeLabel()`/`themeLabel()` translate only the displayed names.
 - `languages[lang]` holds the 31 `sayings` and the preferred female `voices` per language. Speech fires on every **theme change** (auto and manual), not on mode changes.
 - `applyUiLang(uiLang)` runs at the end of the script, because it needs the source menu and status helpers defined further down.
+
+### PWA and mobile
+
+- `sw.js` caches the app shell with stale-while-revalidate (cache name `lichtorgel-v1`); it is registered only over `https:` so local development is never cached. Add new top-level files to `ASSETS` in `sw.js`; bump the cache name only when files are removed or renamed.
+- No Xcode/Android SDK on this machine; native store builds (e.g. Capacitor) would need them plus developer accounts.
+- Phones: `isMobile` (`pointer: coarse`) caps canvas resolution (2D 1.5×, GPU 1.25×) and shortens the synth reverb (1.8 s) to keep the audio thread from underrunning; music contexts use `latencyHint: "playback"` (mic keeps `"interactive"`); the synth scheduler re-syncs instead of cramming late notes (prevents clicks). Safe-area insets pad `main` (`viewport-fit=cover`).
 
 ### Persistence
 

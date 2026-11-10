@@ -2,7 +2,7 @@
 
 ![LichtOrgel – psychedelisches Regenbogen-Mandala mit funkelnden Diamanten und dem Schriftzug „Lucy in the Sky with Diamonds“](og-image.jpg)
 
-Eine Lichtorgel im Browser: Audio von im Browser erzeugten Synthesizer-Loops, Mikrofon, Computer oder einer eigenen Musikdatei wird in zehn Frequenzbänder zerlegt und in Echtzeit als Animation dargestellt. Oberfläche und Stimme gibt es auf Deutsch, Englisch und Italienisch. Die gesamte Anwendung ist eine einzelne Datei (`index.html`) ohne Abhängigkeiten und ohne Build-Schritt.
+Eine Lichtorgel im Browser: Audio von im Browser erzeugten Synthesizer-Loops, Mikrofon, Computer oder einer eigenen Musikdatei wird in zehn Frequenzbänder zerlegt und in Echtzeit als Animation dargestellt. Oberfläche und Stimme gibt es auf Deutsch, Englisch und Italienisch. Die Anwendung ist eine einzelne Datei (`index.html`) ohne Abhängigkeiten und ohne Build-Schritt; dazu kommen Manifest, Service Worker und Icons für die Installation als App.
 
 **Live:** https://helmutqualtinger.github.io/LichtOrgel/
 
@@ -15,6 +15,15 @@ python3 -m http.server 8000
 ```
 
 Danach `http://localhost:8000` öffnen. Die Seite startet direkt im Auto-Modus mit einem Synthesizer-Loop (Goa-Trance bzw. dem zuletzt gewählten Loop). Browser geben Ton und Sprachausgabe meist erst nach einer Interaktion frei; dann genügt ein Klick irgendwo auf die Seite.
+
+## Als App auf dem Handy
+
+Die LichtOrgel ist eine installierbare Web-App (PWA): eigenes Icon auf dem Home-Bildschirm, Vollbild ohne Browserleiste, offline nutzbar. Eine Installation über App Store oder Play Store ist nicht nötig.
+
+- **iPhone/iPad (Safari):** Seite öffnen → Teilen-Symbol → **„Zum Home-Bildschirm“**.
+- **Android (Chrome):** Seite öffnen → Menü ⋮ → **„App installieren“** bzw. „Zum Startbildschirm hinzufügen“.
+
+Updates kommen automatisch: Die App lädt beim Start die neueste Version im Hintergrund und zeigt sie beim nächsten Öffnen.
 
 ## Bedienung
 
@@ -104,4 +113,7 @@ Das Audiosignal wird ausschließlich lokal im Browser verarbeitet. Es werden kei
 |---|---|
 | `index.html` | Die komplette Anwendung (HTML, CSS, JavaScript, Shader) |
 | `og-image.jpg` | Vorschaubild für soziale Medien (1200 × 630) |
+| `manifest.webmanifest` | App-Beschreibung für die Installation (Name, Icons, Vollbild) |
+| `sw.js` | Service Worker für den Offline-Betrieb |
+| `icon-*.png`, `apple-touch-icon.png` | App-Icons (Android, iOS, maskierbar) |
 | `CLAUDE.md` | Architekturhinweise für die Weiterentwicklung |
