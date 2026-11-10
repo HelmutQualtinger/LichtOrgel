@@ -532,7 +532,7 @@
     }
     // Zustände: "pan" (Schwenk zum nächsten Ort), "in" (Zoom hinein bis 1e-16 oder bis das Bild
     // zu über 90 % schwarz ist), "out" (wieder ganz heraus). Die Zoomgeschwindigkeit ändert sich weich.
-    const mandel = { phase: "pan", pan: 0, depth: 0, vel: 0, rot: 0, hue: 0, last: 0, spot: -1, ref: null, from: [-0.6, 0],
+    const mandel = { phase: "pan", pan: 0, depth: 0, vel: 0, rot: 0, hue: 0, kick: 0, last: 0, spot: -1, ref: null, from: [-0.6, 0],
       version: 0, offX: 0, offY: 0, scale: 2.6, maxIt: 250, check: 0, black: 0, lo: 0, hi: 250, loTarget: 0, hiTarget: 250, colorK: 0, colorOff: 0 };
     function mandelStep(s) {
       const now = performance.now();
@@ -540,8 +540,9 @@
       const dt = mandel.last ? Math.min(0.1, (now - mandel.last) / 1000) : 0;
       mandel.last = now;
       mandel.rot += dt * (0.01 + s.overall * 0.06);
-      // Farbverschiebung in der Farbtabelle: läuft mit der Lautstärke, springt bei Bass-Schlägen
-      mandel.hue = (mandel.hue + dt * (0.015 + s.overall * 0.25) + (s.beat ? 0.03 + s.bass * 0.05 : 0)) % 1;
+      // Farbverschiebung in der Farbtabelle: läuft mit der Lautstärke, Bass-Schläge geben einen weich abklingenden Schub
+      mandel.kick = s.beat ? Math.max(mandel.kick * Math.exp(-dt * 2.5), 0.15 + s.bass * 0.25) : mandel.kick * Math.exp(-dt * 2.5);
+      mandel.hue = (mandel.hue + dt * (0.012 + s.overall * 0.12 + mandel.kick)) % 1;
       if (mandel.spot < 0) {
         mandel.spot = 0;
         mandel.ref = orbitFor(0);
@@ -1020,7 +1021,11 @@
           fx.image = fx.img.getContext("2d").createImageData(pw, ph);
         }
         const { orbit, length: olen } = mandel.ref;
-        if (fx.stopsKey !== t.fractal.join()) { fx.stops = stopsRgb(t.fractal); fx.stopsKey = t.fractal.join(); }
+        if (fx.stopsKey !== t.fractal.join()) {
+          fx.stops = stopsRgb(t.fractal);
+          fx.avg = [0, 1, 2].map((i) => fx.stops.reduce((sum, c) => sum + c[i], 0) / fx.stops.length);
+          fx.stopsKey = t.fractal.join();
+        }
         const stops = fx.stops;
         const maxIt = Math.min(mandel.maxIt, 450);
         const sc = mandel.scale / Math.min(pw, ph);
@@ -1036,10 +1041,13 @@
             let rgb = [0, 0, 0];
             if (n < maxIt) {
               const mu = n + 1 - Math.log2(Math.max(1, Math.log(mandelR2) / 2));
-              const lv = levelAt((mu * 0.02) % 1);
-              const tri = ((((Math.log(Math.max(1, mu)) * mandel.colorK + mandel.colorOff + lv * 0.3) % 1) + 1) % 1) * 2;
+              const tri = ((((Math.log(Math.max(1, mu)) * mandel.colorK + mandel.colorOff) % 1) + 1) % 1) * 2;
               const lit = reliefShade(mandelZ[0], mandelZ[1], mandelDer[0], mandelDer[1]);
-              rgb = heatRgb(stops, tri < 1 ? tri : 2 - tri).map((c) => c * (0.2 + 0.8 * lit) + 255 * 0.25 * lit ** 20);
+              const zl = Math.sqrt(mandelR2);
+              const de = (0.5 * zl * Math.log(zl)) / (Math.hypot(mandelDer[0], mandelDer[1]) || 1e-300); // in Pixeln
+              const k = Math.max(0, Math.min(1, (de - 0.3) / 1.2));
+              const fine = k * k * (3 - 2 * k);
+              rgb = heatRgb(stops, tri < 1 ? tri : 2 - tri).map((c, i) => (c * (0.2 + 0.8 * lit) + 255 * 0.25 * lit ** 20) * fine + fx.avg[i] * 0.45 * (1 - fine));
             }
             data[o] = Math.min(255, rgb[0]);
             data[o + 1] = Math.min(255, rgb[1]);
@@ -1314,13 +1322,22 @@ vec4 shade(vec2 fc) {
   vec3 col = background(p) * 0.5;
   if (n < maxIt) {
     float mu = n + 1.0 - log2(max(log(r2) * 0.5, 1.0));
-    float lv = levelAt(fract(mu * 0.02));
-    float pt = 1.0 - abs(fract(log(max(mu, 1.0)) * u[11].y + u[11].w + lv * 0.3) * 2.0 - 1.0);
-    vec2 dn = der / max(max(abs(der.x), abs(der.y)), 1e-30);
+    float pt = 1.0 - abs(fract(log(max(mu, 1.0)) * u[11].y + u[11].w) * 2.0 - 1.0);
+    float dm = max(max(abs(der.x), abs(der.y)), 1e-30);
+    vec2 dn = der / dm;
     vec2 nrm = vec2(z.x * dn.x + z.y * dn.y, z.y * dn.x - z.x * dn.y);
     nrm = nrm / max(length(nrm), 1e-20);
     float lit = max((dot(nrm, vec2(-0.7071, -0.7071)) + 1.5) / 2.5, 0.0);
-    col = heat(pt) * (0.2 + 0.8 * lit) + vec3(0.25, 0.25, 0.25) * pow(lit, 20.0);
+    vec3 litCol = heat(pt) * (0.2 + 0.8 * lit) + vec3(0.25, 0.25, 0.25) * pow(lit, 20.0);
+    // Distanzschätzung zum Rand in Pixeln: wo die Struktur feiner als ein Pixel ist, statt Farbrauschen
+    // eine ruhige, abgedunkelte Mittelfarbe der Palette
+    float zl = sqrt(r2);
+    float de = 0.5 * zl * log(zl) / (dm * length(dn)) * min(res.x, res.y);
+    vec3 avg = vec3(0.0, 0.0, 0.0);
+    for (int k = 0; k < 8; k++) {
+      avg = avg + stopAt(k) * 0.125;
+    }
+    col = mix(avg * 0.45, litCol, smoothstep(0.3, 1.5, de));
   }
   col = 1.0 - exp(-col * 1.3);
   return vec4(col, 1.0);
@@ -1582,7 +1599,7 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
 
     function renderGpu(t, s, name, next, mix) {
       // Mandelbrot ist teuer (bis ~700 Iterationen pro Pixel): Auflösung passt sich der Bildrate an
-      // (im Mittel unter ~45 fps weniger Pixel, bis 0,5; bei Luft wieder mehr; Stufen von 0,05 gegen ständiges Umskalieren)
+      // (im Mittel unter ~40 fps weniger Pixel, bis 0,75; bei Luft wieder mehr; Stufen von 0,05 gegen ständiges Umskalieren)
       const mandelOn = name === "Mandelbrot" || next === "Mandelbrot";
       const now = performance.now();
       const frameMs = now - (gpuState.lastFrame ?? now);
@@ -1591,7 +1608,7 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
         // geglättete Frame-Zeit, damit einzelne Ruckler die Auflösung nicht absenken
         gpuState.frameAvg = (gpuState.frameAvg ?? frameMs) * 0.95 + frameMs * 0.05;
         const cap = Math.min(gpuRatio, isMobile ? 0.75 : 1);
-        if (gpuState.frameAvg > 22) gpuState.mandelRes = Math.max(0.5, (gpuState.mandelRes ?? cap) - 0.005);
+        if (gpuState.frameAvg > 25) gpuState.mandelRes = Math.max(0.75, (gpuState.mandelRes ?? cap) - 0.005);
         else if (gpuState.frameAvg < 18.5) gpuState.mandelRes = Math.min(cap, (gpuState.mandelRes ?? cap) + 0.005);
       }
       const r = mandelOn ? Math.round(Math.min(gpuState.mandelRes ?? 1, gpuRatio) * 20) / 20 : gpuRatio;
