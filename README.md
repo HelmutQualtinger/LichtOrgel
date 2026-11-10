@@ -78,7 +78,7 @@ Trennt sich ein Mikrofon (Gerätewechsel, Bluetooth, Ruhezustand), verbindet die
 | Galaxie (GPU) | Spiralgalaxie; Bass im Kern, Höhen in den äußeren Armen |
 | Kaleidoskop (GPU) | Zehnfach gespiegelt und siebenfach gefaltet, jede Faltung an ein Band gekoppelt |
 | Plasma (GPU) | Interferenzmuster; Frequenzen und Tempo aus dem Spektrum |
-| Mandelbrot (GPU) | Zoomt bis etwa 10⁻¹⁶ in die Mandelbrot-Menge, wieder heraus und weiter zum nächsten von sieben Misiurewicz-Punkten (je Zyklus ca. 2,5–3,5 Minuten); Referenz-Orbit mit BigInt-Genauigkeit auf der CPU, Pixel per Perturbation auf der GPU, Auflösung passt sich der Bildrate an. Zoomtempo nach Lautstärke mit leichtem Schub bei Bass-Schlägen, langsame Drehung, Farbverlauf und Helligkeit aus dem Spektrum |
+| Mandelbrot (GPU) | Zoomt bis etwa 10⁻¹⁶ in die Mandelbrot-Menge, wieder heraus und weiter zum nächsten von sieben Misiurewicz-Punkten (je Zyklus ca. 2,5–3,5 Minuten); Referenz-Orbit mit BigInt-Genauigkeit auf der CPU, Pixel per Perturbation auf der GPU, Auflösung passt sich der Bildrate an. Zoomtempo nach Lautstärke mit leichtem Schub bei Bass-Schlägen, langsame Drehung; der Ton verschiebt die Farbtabelle (Lautstärke, Bass-Schläge, Frequenzbänder), die Helligkeit bleibt konstant |
 | Terrain | 3D-Gitterlandschaft aus dem Spektrumsverlauf mit Sonne am Horizont |
 | Blitze | Blitzeinschläge bei Bass-Schlägen und Spitzen in den Höhen |
 
