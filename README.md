@@ -40,7 +40,7 @@ Alle Einstellungen befinden sich in der Kopfleiste und werden im Browser gespeic
 | **Thema** | Farbthema wählen (fließender Übergang) |
 | **Klick ins Bild** | Im Mandelbrot-Effekt: angeklickten Punkt als neues Zoomziel wählen |
 
-Rechts zeigt die Leiste das aktive Grafik-Backend und die Bildrate.
+Unten rechts im Bild stehen das aktive Grafik-Backend und die Bildrate.
 
 ### Audioquellen
 
@@ -95,7 +95,7 @@ Mit eingeschalteter **Stimme** spricht eine weibliche Stimme bei jedem Farbwechs
 
 ## Grafik-Backends
 
-Die Seite wählt automatisch: **WebGPU** → **WebGL2** → **Canvas 2D**. Startet WebGPU nicht innerhalb von 4 Sekunden, wird WebGL2 verwendet. Ohne GPU-Unterstützung laufen alle Effekte als Canvas-2D-Varianten.
+Die Seite wählt automatisch: **WebGL2** → **WebGPU** → **Canvas 2D**. WebGL2 ist Standard, weil es mit diesen Shadern spürbar schneller ist als WebGPU; WebGPU lässt sich per `?gpu=webgpu` erzwingen. Ohne GPU-Unterstützung laufen alle Effekte als Canvas-2D-Varianten.
 
 Zum Testen lässt sich ein Backend per URL-Parameter erzwingen:
 

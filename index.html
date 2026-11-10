@@ -117,7 +117,7 @@
     .source-select { max-width: 200px; text-overflow: ellipsis; }
     .lang-select { padding-right: 26px; background-position: right 8px center; }
     @media (max-width: 1450px) { .picker > span:first-child { display: none; } }
-    @media (max-width: 1200px) { .bar { gap: 8px 10px; } .bar .backend { display: none; } button.toggle { padding: 0 11px; } .bar h1 { display: none; } }
+    @media (max-width: 1200px) { .bar { gap: 8px 10px; } button.toggle { padding: 0 11px; } .bar h1 { display: none; } }
     @media (max-width: 1450px) {
       .source-select { max-width: 160px; }
       #status { max-width: 150px; }
@@ -125,7 +125,21 @@
       .lang-select { width: 56px; text-overflow: clip; }
     }
     .swatch { width: 18px; height: 18px; border-radius: 5px; flex: 0 0 auto; }
-    .backend { color: var(--muted); font-size: .72rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    /* Backend und Bildrate unten rechts über dem Bild, damit sich die Kopfleiste nicht bewegt */
+    .backend {
+      position: absolute;
+      right: 10px;
+      bottom: 8px;
+      z-index: 3;
+      padding: 2px 8px;
+      border-radius: 6px;
+      background: rgba(0, 0, 0, 0.45);
+      color: rgba(255, 255, 255, 0.75);
+      font-size: .72rem;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+      pointer-events: none;
+    }
 
     .vis-stage {
       position: relative;
@@ -171,7 +185,6 @@
       .picker { flex: 1 1 140px; min-width: 0; }
       .picker select { flex: 1; min-width: 0; }
       .picker > span:first-child { display: none; }
-      .backend { display: none; }
     }
   </style>
 </head>
@@ -191,11 +204,11 @@
         <select id="lang" class="lang-select" data-i18n-aria="ariaLang" aria-label="Sprache"></select>
         <label class="picker"><span data-i18n="animation">Animation</span><select id="mode-switch" data-i18n-aria="animation" aria-label="Animation"></select></label>
         <label class="picker"><span data-i18n="theme">Thema</span><span class="swatch" id="theme-swatch" aria-hidden="true"></span><select id="theme-switch" data-i18n-aria="ariaTheme" aria-label="Farbthema"></select></label>
-        <span class="backend" id="backend">Canvas 2D</span>
       </div>
     </header>
 
     <div class="vis-stage" id="vis-stage" data-i18n-aria="ariaStage" aria-label="Klangvisualisierung">
+      <span class="backend" id="backend">Canvas 2D</span>
       <canvas id="visual" aria-hidden="true"></canvas>
       <canvas id="visual-b" aria-hidden="true"></canvas>
       <canvas id="visual-gpu" aria-hidden="true" hidden></canvas>
@@ -1205,7 +1218,7 @@
       }
     };
 
-    // ---- GPU-Beschleunigung: WebGPU → WebGL2 → Canvas 2D ----
+    // ---- GPU-Beschleunigung: WebGL2 → WebGPU → Canvas 2D ----
     // Jeder GPU-Modus ist ein Fragment-Shader im GLSL-Teilformat. Für WebGPU wird er per toWGSL()
     // automatisch nach WGSL übersetzt. Regeln für Shader-Code: Deklarationen immer mit Typ,
     // if/for immer mit Klammern, kein Ternär-Operator, keine Swizzle-Zuweisung, Floats mit ".0".
@@ -1213,7 +1226,7 @@
     //   u[0] = Auflösung x, y, Zeit, Flash      u[1..3] = Bänder 0–9, Bass, Gesamt
     //   u[4..6] = Themenfarben rgb + Mitten / Höhen / Puls   u[7] = Kernfarbe rgb + Glow
     //   u[8] = Hintergrund innen rgb + Drehung   u[9] = Hintergrund außen rgb + Fahrt
-    //   u[10..11] = Mandelbrot-Zoom (siehe dort), u[12..17] = Mandelbrot-Farbtabelle (8 × rgb), u[18] = deren Mittelfarbe; orbitAt(i) liest den Referenz-Orbit aus der Orbit-Textur
+    //   u[10..11] = Mandelbrot-Zoom (siehe dort), u[12..17] = Mandelbrot-Farbtabelle (8 × rgb), u[18] = deren Mittelfarbe, u[19] = Referenzpunkt (für den Kardioiden-Test); orbitAt(i) liest den Referenz-Orbit aus der Orbit-Textur
     const shaderLib = `
 float level(int i) { return u[1 + i / 4][i % 4]; }
 float levelAt(float x) {
@@ -1341,6 +1354,7 @@ vec3 heat(float t) {
   }
   return c;
 }
+vec2 cmul(vec2 a, vec2 b) { return vec2(a.x * b.x - a.y * b.y, a.x * b.y + a.y * b.x); }
 vec4 shade(vec2 fc) {
   vec2 res = u[0].xy;
   vec2 p = (fc - res * 0.5) / min(res.x, res.y);
@@ -1357,7 +1371,17 @@ vec4 shade(vec2 fc) {
   int m = 0;
   float n = 0.0;
   float r2 = 0.0;
+  // Bei geringer Tiefe: Hauptkardioide und Periode-2-Kreis sofort als Inneres erkennen
+  if (u[10].z > 0.00001) {
+    vec2 c = u[19].xy + dc;
+    float qx = c.x - 0.25;
+    float q = qx * qx + c.y * c.y;
+    if (q * (q + qx) <= 0.25 * c.y * c.y || (c.x + 1.0) * (c.x + 1.0) + c.y * c.y <= 0.0625) {
+      n = maxIt;
+    }
+  }
   for (int i = 0; i < 4096; i++) {
+    if (n >= maxIt) { break; }
     der = vec2(2.0 * (z.x * der.x - z.y * der.y), 2.0 * (z.x * der.y + z.y * der.x)) + dcp;
     dz = vec2(2.0 * (zr.x * dz.x - zr.y * dz.y) + dz.x * dz.x - dz.y * dz.y, 2.0 * (zr.x * dz.y + zr.y * dz.x) + 2.0 * dz.x * dz.y) + dc;
     m = m + 1;
@@ -1444,10 +1468,10 @@ vec4 shade(vec2 fc) {
     }
 
     const wgslHead = `
-struct U { v: array<vec4f, 19> };
+struct U { v: array<vec4f, 20> };
 @group(0) @binding(0) var<uniform> uu: U;
 @group(0) @binding(1) var orbitTex: texture_2d<f32>;
-fn orbitAt(i: i32) -> vec2f { return textureLoad(orbitTex, vec2i(i % 1024, i / 1024), 0).xy; }
+fn orbitAt(i: i32) -> vec2f { return textureLoad(orbitTex, vec2i(i & 1023, i >> 10u), 0).xy; }
 fn fmod(a: f32, b: f32) -> f32 { return a - b * floor(a / b); }
 @vertex fn vs(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {
   var pts = array<vec2f, 3>(vec2f(-1.0, -1.0), vec2f(3.0, -1.0), vec2f(-1.0, 3.0));
@@ -1461,12 +1485,12 @@ void main() {
 }`;
     const glslHead = `#version 300 es
 precision highp float;
-uniform vec4 u[19];
+uniform vec4 u[20];
 uniform highp sampler2D orbitTex;
 out vec4 outColor;
 float fmod(float a, float b) { return a - b * floor(a / b); }
 float atan2(float y, float x) { return atan(y, x); }
-vec2 orbitAt(int i) { return texelFetch(orbitTex, ivec2(i % 1024, i / 1024), 0).xy; }
+vec2 orbitAt(int i) { return texelFetch(orbitTex, ivec2(i & 1023, i >> 10), 0).xy; }
 `;
     const glslTail = `
 void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }`;
@@ -1474,7 +1498,7 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
     const visStage = document.querySelector("#vis-stage");
     const backendLabel = document.querySelector("#backend");
     let gpuCanvas = document.querySelector("#visual-gpu");
-    const gpuUniforms = new Float32Array(76);
+    const gpuUniforms = new Float32Array(80);
     const gpuState = { rot: 0, travel: 0, pulse: 0, start: performance.now() };
     let gpu = null;
     let gpuActive = false;
@@ -1673,20 +1697,29 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
       // ?gpu=webgpu | webgl | off erzwingt ein Backend (zum Testen und Vergleichen)
       const want = force ?? new URLSearchParams(location.search).get("gpu");
       gpu = null;
-      if (want !== "off" && want !== "webgl") {
-        // Hängt die WebGPU-Initialisierung (Treiberprobleme), nach 4 s auf WebGL2 ausweichen
+      // Standard ist WebGL2: mit diesen Shadern gemessen etwa 1,7× schneller als WebGPU (Mandelbrot auf
+      // Apple M1). WebGPU nur auf Wunsch (?gpu=webgpu) oder wenn WebGL2 fehlt.
+      const tryWebGL = () => {
+        try { gpu = initWebGL(); } catch (error) { console.warn("WebGL2 nicht nutzbar:", error); freshGpuCanvas(); gpu = null; }
+      };
+      const tryWebGPU = async () => {
+        // Hängt die WebGPU-Initialisierung (Treiberprobleme), nach 4 s aufgeben
         let cancelled = false;
         const timeout = new Promise((resolve) => setTimeout(() => { cancelled = true; resolve(null); }, 4000));
         try {
           gpu = await Promise.race([initWebGPU(() => cancelled), timeout]);
-          if (!gpu && cancelled) console.warn("WebGPU-Initialisierung zu langsam, nutze WebGL2");
+          if (!gpu && cancelled) console.warn("WebGPU-Initialisierung zu langsam");
         } catch (error) {
           console.warn("WebGPU nicht nutzbar:", error);
           freshGpuCanvas();
         }
-      }
-      if (!gpu && want !== "off") {
-        try { gpu = initWebGL(); } catch (error) { console.warn("WebGL2 nicht nutzbar:", error); freshGpuCanvas(); gpu = null; }
+      };
+      if (want === "webgpu") {
+        await tryWebGPU();
+        if (!gpu) tryWebGL();
+      } else if (want !== "off") {
+        tryWebGL();
+        if (!gpu && want !== "webgl") await tryWebGPU();
       }
       relabelMenus();
       resizeVisual();
@@ -1721,7 +1754,7 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
 
     function renderGpu(t, s, name, next, mix) {
       // Mandelbrot ist teuer (bis ~700 Iterationen pro Pixel): Auflösung passt sich der Bildrate an
-      // (im Mittel unter ~40 fps weniger Pixel, bis 0,75; bei Luft wieder mehr; Stufen von 0,05 gegen ständiges Umskalieren)
+      // (im Mittel unter ~40 fps weniger Pixel, bis 0,6; bei Luft wieder mehr; Stufen von 0,05 gegen ständiges Umskalieren)
       const mandelOn = name === "Mandelbrot" || next === "Mandelbrot";
       const now = performance.now();
       const frameMs = now - (gpuState.lastFrame ?? now);
@@ -1730,7 +1763,7 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
         // geglättete Frame-Zeit, damit einzelne Ruckler die Auflösung nicht absenken
         gpuState.frameAvg = (gpuState.frameAvg ?? frameMs) * 0.95 + frameMs * 0.05;
         const cap = Math.min(gpuRatio, isMobile ? 0.75 : 1);
-        if (gpuState.frameAvg > 25) gpuState.mandelRes = Math.max(0.75, (gpuState.mandelRes ?? cap) - 0.005);
+        if (gpuState.frameAvg > 25) gpuState.mandelRes = Math.max(0.6, (gpuState.mandelRes ?? cap) - 0.005);
         else if (gpuState.frameAvg < 18.5) gpuState.mandelRes = Math.min(cap, (gpuState.mandelRes ?? cap) + 0.005);
       }
       const r = mandelOn ? Math.round(Math.min(gpuState.mandelRes ?? 1, gpuRatio) * 20) / 20 : gpuRatio;
@@ -1763,6 +1796,7 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
         const stops = t.fractal.map(hexRgb);
         U.set(stops.flat(), 48);
         U.set([0, 1, 2].map((i) => stops.reduce((sum, c) => sum + c[i], 0) / stops.length), 72);
+        U.set([mandel.ref.center[0], mandel.ref.center[1], 0, 0], 76);
       }
       gpu.render(name, next, mix);
     }
