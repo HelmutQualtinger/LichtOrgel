@@ -544,8 +544,9 @@
       mandel.kick = s.beat ? Math.max(mandel.kick * Math.exp(-dt * 2.5), 0.15 + s.bass * 0.25) : mandel.kick * Math.exp(-dt * 2.5);
       mandel.hue = (mandel.hue + dt * (0.012 + s.overall * 0.12 + mandel.kick)) % 1;
       if (mandel.spot < 0) {
-        mandel.spot = 0;
-        mandel.ref = orbitFor(0);
+        // Startpunkt bei jedem Seitenaufruf anders: Zufallszahl aus der Uhrzeit (Millisekunden)
+        mandel.spot = Date.now() % mandelSpots.length;
+        mandel.ref = orbitFor(mandel.spot);
         mandel.version += 1;
       }
       if (mandel.phase === "pan") {
