@@ -424,9 +424,7 @@
       return str.startsWith("-") ? -v : v;
     }
     const fixedToNum = (v) => Number(v >> (fixBits - 60n)) / 2 ** 60;
-    function referenceOrbit(spot) {
-      const cx = toFixed(spot[0]);
-      const cy = toFixed(spot[1]);
+    function referenceOrbit(cx, cy) {
       const limit = 16n << fixBits;
       const orbit = new Float64Array(orbitMax * 2);
       let x = 0n;
@@ -441,11 +439,11 @@
         orbit[n * 2] = fixedToNum(x);
         orbit[n * 2 + 1] = fixedToNum(y);
       }
-      return { orbit, f32: Float32Array.from(orbit), length: n, center: [fixedToNum(cx), fixedToNum(cy)] };
+      return { orbit, f32: Float32Array.from(orbit), length: n, center: [fixedToNum(cx), fixedToNum(cy)], cx, cy };
     }
     const orbitCache = new Map();
     function orbitFor(i) {
-      if (!orbitCache.has(i)) orbitCache.set(i, referenceOrbit(mandelSpots[i]));
+      if (!orbitCache.has(i)) orbitCache.set(i, referenceOrbit(toFixed(mandelSpots[i][0]), toFixed(mandelSpots[i][1])));
       return orbitCache.get(i);
     }
     // Farbtabelle des Mandelbrot-Modus = fractal des aktuellen Themas (8 Stützstellen; gespiegelt durchlaufen)
@@ -506,34 +504,64 @@
       mandelDer[1] = ey;
       return n;
     }
-    // Grobes Raster von 24 × 14 Punkten über das sichtbare Bild: Anteil schwarzer Pixel (Inneres der Menge)
-    // und sichtbarer Iterationsbereich (5.–95. Perzentil der entkommenen Punkte) für die Farbzuordnung
-    function mandelSample(aspect) {
+    // Raster von 48 × 28 Punkten über das sichtbare Bild, 2 Zeilen pro Frame (ein Durchgang ≈ 14 Frames):
+    // Anteil schwarzer Pixel (max. Iteration erreicht) und sichtbarer Iterationsbereich (5.–95. Perzentil
+    // der entkommenen Punkte) für die Farbzuordnung
+    const scanCols = 48;
+    const scanRows = 28;
+    function mandelScan(aspect, rows) {
+      const scan = mandel.scan;
       const { orbit, length: olen } = mandel.ref;
       const ca = Math.cos(mandel.rot) * mandel.scale;
       const sa = Math.sin(mandel.rot) * mandel.scale;
       const ax = Math.max(1, aspect);
       const ay = Math.max(1, 1 / aspect);
-      const escaped = [];
-      for (let j = 0; j < 14; j += 1) {
-        for (let i = 0; i < 24; i += 1) {
-          const px = ((i + 0.5) / 24 - 0.5) * ax;
-          const py = ((j + 0.5) / 14 - 0.5) * ay;
+      for (let r = 0; r < rows && scan.row < scanRows; r += 1, scan.row += 1) {
+        const py = ((scan.row + 0.5) / scanRows - 0.5) * ay;
+        for (let i = 0; i < scanCols; i += 1) {
+          const px = ((i + 0.5) / scanCols - 0.5) * ax;
           const n = mandelIter(orbit, olen, mandel.offX + px * ca - py * sa, mandel.offY + px * sa + py * ca, mandel.maxIt);
-          if (n < mandel.maxIt) escaped.push(n);
+          if (n < mandel.maxIt) scan.escaped.push(n);
         }
       }
-      mandel.black = 1 - escaped.length / (24 * 14);
+      if (scan.row < scanRows) return;
+      const escaped = scan.escaped;
+      mandel.black = 1 - escaped.length / (scanCols * scanRows);
+      mandel.noBlack = mandel.black === 0 ? mandel.noBlack + 1 : 0;
       if (escaped.length > 8) {
         escaped.sort((a, b) => a - b);
         mandel.loTarget = escaped[Math.floor(escaped.length * 0.05)];
         mandel.hiTarget = escaped[Math.floor(escaped.length * 0.95)];
       }
+      mandel.scan = { row: 0, escaped: [] };
     }
-    // Zustände: "pan" (Schwenk zum nächsten Ort), "in" (Zoom hinein bis 1e-16 oder bis das Bild
-    // zu über 90 % schwarz ist), "out" (wieder ganz heraus). Die Zoomgeschwindigkeit ändert sich weich.
-    const mandel = { phase: "pan", pan: 0, depth: 0, vel: 0, rot: 0, hue: 0, kick: 0, last: 0, spot: -1, ref: null, from: [-0.6, 0],
-      version: 0, offX: 0, offY: 0, scale: 2.6, maxIt: 250, check: 0, black: 0, lo: 0, hi: 250, loTarget: 0, hiTarget: 250, colorK: 0, colorOff: 0 };
+    // Klick ins Bild: dieser Punkt wird neues Zoomziel. Seine Koordinaten werden in BigInt aus dem aktuellen
+    // Referenzpunkt plus Abstand berechnet, damit das auch in großer Tiefe exakt bleibt; die Tiefe bleibt,
+    // die Ansicht schwenkt in 2 s zum Punkt und zoomt dann weiter hinein.
+    function mandelClick(px, py) {
+      if (!mandel.ref) return;
+      const ca = Math.cos(mandel.rot) * mandel.scale;
+      const sa = Math.sin(mandel.rot) * mandel.scale;
+      const dcx = mandel.offX + px * ca - py * sa;
+      const dcy = mandel.offY + px * sa + py * ca;
+      const one = 2 ** Number(fixBits);
+      const old = mandel.ref;
+      mandel.ref = referenceOrbit(old.cx + BigInt(Math.round(dcx * one)), old.cy + BigInt(Math.round(dcy * one)));
+      mandel.version += 1;
+      mandel.panVec = [mandel.offX - dcx, mandel.offY - dcy];
+      mandel.phase = "pan";
+      mandel.pan = 0;
+      mandel.panSecs = 2;
+      mandel.vel = 0;
+      mandel.black = 0;
+      mandel.noBlack = 0;
+    }
+    // Zustände: "pan" (Schwenk zum Ziel), "in" (Zoom hinein bis 1e-16, bis das Bild zu über 90 % schwarz ist
+    // oder bis kein Rasterpunkt mehr die maximale Iteration erreicht), "out" (wieder ganz heraus, dann nächster
+    // Ort). Die Zoomgeschwindigkeit ändert sich weich.
+    const mandel = { phase: "pan", pan: 0, panSecs: 5, panVec: [0, 0], depth: 0, vel: 0, rot: 0, hue: 0, kick: 0, last: 0, spot: -1,
+      ref: null, version: 0, offX: 0, offY: 0, scale: 2.6, maxIt: 250, scan: { row: 0, escaped: [] }, black: 0, noBlack: 0,
+      lo: 0, hi: 250, loTarget: 0, hiTarget: 250, colorK: 0, colorOff: 0 };
     function mandelStep(s) {
       const now = performance.now();
       if (now === mandel.last) return;
@@ -547,11 +575,12 @@
         // Startpunkt bei jedem Seitenaufruf anders: Zufallszahl aus der Uhrzeit (Millisekunden)
         mandel.spot = Date.now() % mandelSpots.length;
         mandel.ref = orbitFor(mandel.spot);
+        mandel.panVec = [-0.6 - mandel.ref.center[0], -mandel.ref.center[1]];
         mandel.version += 1;
       }
       if (mandel.phase === "pan") {
-        mandel.pan = Math.min(1, mandel.pan + dt / 5);
-        if (mandel.pan >= 1) { mandel.phase = "in"; mandel.black = 0; }
+        mandel.pan = Math.min(1, mandel.pan + dt / mandel.panSecs);
+        if (mandel.pan >= 1) { mandel.phase = "in"; mandel.black = 0; mandel.noBlack = 0; }
       } else {
         // Zielgeschwindigkeit in Zehnerpotenzen pro Sekunde; vor dem Umkehrpunkt abbremsen
         const want = mandel.phase === "in"
@@ -560,27 +589,32 @@
         mandel.vel += (want - mandel.vel) * Math.min(1, dt * 0.8);
         mandel.depth = Math.max(0, Math.min(mandelDepth, mandel.depth + mandel.vel * dt + (s.beat && mandel.phase === "in" ? 0.01 : 0)));
         if (mandel.phase === "in") {
-          if (mandel.depth >= mandelDepth - 0.02 || (mandel.depth > 3 && mandel.black > 0.9)) { mandel.phase = "out"; mandel.black = 0; }
+          if (mandel.depth >= mandelDepth - 0.02 || (mandel.depth > 3 && mandel.black > 0.9) || (mandel.depth > 2 && mandel.noBlack >= 2)) {
+            mandel.phase = "out";
+            mandel.black = 0;
+            mandel.noBlack = 0;
+          }
         } else if (mandel.depth <= 0.001) {
           const next = (mandel.spot + 1) % mandelSpots.length;
-          mandel.from = mandel.ref.center;
+          const from = mandel.ref.center;
           mandel.spot = next;
           mandel.ref = orbitFor(next);
+          mandel.panVec = [from[0] - mandel.ref.center[0], from[1] - mandel.ref.center[1]];
           mandel.version += 1;
           mandel.phase = "pan";
           mandel.pan = 0;
+          mandel.panSecs = 5;
           mandel.vel = 0;
           setTimeout(() => orbitFor((next + 1) % mandelSpots.length), 1000); // nächsten Orbit vorbereiten
         }
       }
       const e = mandel.phase === "pan" ? mandel.pan : 1;
       const ease = 1 - e * e * (3 - 2 * e);
-      mandel.offX = (mandel.from[0] - mandel.ref.center[0]) * ease;
-      mandel.offY = (mandel.from[1] - mandel.ref.center[1]) * ease;
+      mandel.offX = mandel.panVec[0] * ease;
+      mandel.offY = mandel.panVec[1] * ease;
       mandel.scale = 2.6 * 10 ** -mandel.depth * (1 - s.bass * 0.08);
       mandel.maxIt = Math.min(orbitMax - 2, Math.round(250 + mandel.depth * 30));
-      mandel.check += 1;
-      if (mandel.check % 12 === 0) mandelSample(visCanvas.clientWidth / Math.max(1, visCanvas.clientHeight));
+      mandelScan(visCanvas.clientWidth / Math.max(1, visCanvas.clientHeight), 2);
       // Lineare Farbzuordnung: die Palette läuft heatCycles-mal über den sichtbaren Iterationsbereich
       // (weich nachgeführt); Farbe = fract(mu · colorK + colorOff)
       const follow = Math.min(1, dt * 1.5);
@@ -1992,6 +2026,14 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
     //   2D + 2D: zwei Canvas-Ebenen, Deckkraft gegenläufig
     //   GPU + GPU: ein Renderdurchgang, der neue Effekt per Blend-Konstante darüber
     //   GPU + 2D: GPU-Canvas liegt oben, seine Deckkraft trägt die Überblendung
+    // Im Mandelbrot-Modus wählt ein Klick ins Bild das nächste Zoomziel
+    visStage.addEventListener("click", (event) => {
+      if (modeName !== "Mandelbrot" || modeTransition) return;
+      const rect = visStage.getBoundingClientRect();
+      const unit = Math.min(rect.width, rect.height);
+      mandelClick((event.clientX - rect.left - rect.width / 2) / unit, (event.clientY - rect.top - rect.height / 2) / unit);
+      autoNextMode = 0; // Auto-Modus: Effekt läuft ab jetzt wieder volle 20 s
+    });
     const layers = [visCanvas, document.querySelector("#visual-b")]
       .map((canvas) => ({ canvas, ctx: canvas.getContext("2d"), mode: null }));
     const fxStore = {};
