@@ -42,6 +42,11 @@ Rechts zeigt die Leiste das aktive Grafik-Backend und die Bildrate.
   - *Goa-Trance* (145 BPM) – Kick, rollender Bass, Acid-Lead mit Resonanzfilter und Gleittönen, Hi-Hats; 64-Takt-Arrangement mit Breakdown
   - *Raga-Drone* (76 BPM) – Bordun, Tanpura, sitarähnliche Melodie im Raga Bhairav, Tabla im Teental
   - *Kosmische Reise* (96 BPM) – Akkordflächen, Arpeggio im Stil der Berliner Schule mit Filterfahrt, Sub-Bass, Glocken
+  - *Dark Psy (Forest)* (152 BPM) – rollender Bass, chromatisches Squelch-Lead, metallische Percussion, Laser-Sweeps
+  - *Psy-Dub* (72 BPM) – One-Drop-Beat, Offbeat-Orgelakkorde mit Echo, Dub-Bassline, Sirene
+  - *60s-Psychedelic-Orgel* (112 BPM) – Rock-Beat mit Tamburin, Fuzz-Bass, Orgelakkorde und -melodie in Phrygisch-Dur
+  - *Krautrock-Motorik* (124 BPM) – Motorik-Beat, treibender Bass, Orgelflächen, Sequenzer-Motiv
+  - *Klangschalen-Meditation* – ohne Beat: Om-Bordun, tibetische Klangschalen mit Schwebungen, Windspiel
 - **Eigene Musikdatei** – öffnet die Dateiauswahl; die Datei wird lokal im Browser abgespielt und in Schleife wiederholt.
 
 Trennt sich ein Mikrofon (Gerätewechsel, Bluetooth, Ruhezustand), verbindet die Seite automatisch neu und weicht bei Bedarf auf das Standard-Mikrofon aus.

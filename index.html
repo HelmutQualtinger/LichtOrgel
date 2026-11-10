@@ -226,6 +226,8 @@
         groupInputs: "Eingänge", srcFile: "Eigene Musikdatei …",
         groupSynth: "Synthesizer-Loops (im Browser)", groupOwn: "Eigene Musik",
         synth_goa: "Goa-Trance – 145 BPM", synth_raga: "Raga-Drone mit Sitar & Tabla", synth_kosmos: "Kosmische Reise – Ambient",
+        synth_forest: "Dark Psy (Forest) – 152 BPM", synth_psydub: "Psy-Dub – 72 BPM", synth_sixties: "60s-Psychedelic-Orgel – 112 BPM",
+        synth_krautrock: "Krautrock-Motorik – 124 BPM", synth_bowls: "Klangschalen-Meditation",
         musicConnecting: (n) => `Verbinde mit ${n} …`, musicPlaying: (n) => `♪ ${n}`,
         errStream: (n) => `${n} nicht abspielbar`, clickToPlay: "Zum Abspielen irgendwo klicken",
         modes: {},
@@ -253,6 +255,8 @@
         groupInputs: "Inputs", srcFile: "Own music file …",
         groupSynth: "Synthesizer loops (in browser)", groupOwn: "Own music",
         synth_goa: "Goa trance – 145 BPM", synth_raga: "Raga drone with sitar & tabla", synth_kosmos: "Cosmic journey – ambient",
+        synth_forest: "Dark psy (forest) – 152 BPM", synth_psydub: "Psy dub – 72 BPM", synth_sixties: "60s psychedelic organ – 112 BPM",
+        synth_krautrock: "Krautrock motorik – 124 BPM", synth_bowls: "Singing bowl meditation",
         musicConnecting: (n) => `Connecting to ${n} …`, musicPlaying: (n) => `♪ ${n}`,
         errStream: (n) => `${n} cannot be played`, clickToPlay: "Click anywhere to play",
         modes: { Kreis: "Circle", Welle: "Wave", Oszilloskop: "Oscilloscope", Partikel: "Particles", Wasserfall: "Waterfall",
@@ -281,6 +285,8 @@
         groupInputs: "Ingressi", srcFile: "File musicale …",
         groupSynth: "Loop di sintetizzatore (nel browser)", groupOwn: "La tua musica",
         synth_goa: "Goa trance – 145 BPM", synth_raga: "Raga drone con sitar e tabla", synth_kosmos: "Viaggio cosmico – ambient",
+        synth_forest: "Dark psy (forest) – 152 BPM", synth_psydub: "Psy dub – 72 BPM", synth_sixties: "Organo psichedelico anni '60 – 112 BPM",
+        synth_krautrock: "Krautrock motorik – 124 BPM", synth_bowls: "Meditazione con campane tibetane",
         musicConnecting: (n) => `Connessione a ${n} …`, musicPlaying: (n) => `♪ ${n}`,
         errStream: (n) => `Impossibile riprodurre ${n}`, clickToPlay: "Clicca ovunque per ascoltare",
         modes: { Kreis: "Cerchio", Welle: "Onda", Oszilloskop: "Oscilloscopio", Partikel: "Particelle", Wasserfall: "Cascata",
@@ -1985,6 +1991,67 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
         }
       },
 
+      forest: {
+        bpm: 152,
+        gain: 0.9,
+        init({ makeBus }) {
+          return {
+            kick: makeBus(1, 0, 0.03), bass: makeBus(0.9, 0, 0), hat: makeBus(0.5, 0.2, 0.15), perc: makeBus(0.35, 0.6, 0.4),
+            lead: makeBus(0.5, 0.4, 0.3), fx: makeBus(0.25, 0.4, 0.9), pattern: null
+          };
+        },
+        step(s, step, t, v, dur) {
+          const bar = Math.floor(step / 16) % 64;
+          const i = step % 16;
+          const breakdown = bar >= 32 && bar < 40;
+          // chromatisches Squelch-Muster, alle 8 Takte neu
+          if (!s.pattern || (i === 0 && bar % 8 === 0)) {
+            const notes = [38, 39, 42, 43, 45, 46, 50, 51];
+            s.pattern = Array.from({ length: 16 }, () => (Math.random() < 0.6 ? { note: notes[Math.floor(Math.random() * notes.length)], accent: Math.random() < 0.35 } : null));
+          }
+          if (!breakdown && i % 4 === 0) v.kick(s.kick, t, 1);
+          if (i % 4 !== 0) v.synth(s.bass, t, midiHz(26), dur * 0.7, { vol: breakdown ? 0.25 : 0.45, cutoff: 180 + 120 * Math.sin(step / 32), q: 8, envAmt: 400, release: 0.02 });
+          if (!breakdown && i % 4 === 2) v.noiseHit(s.hat, t, 0.2, 0.09, 8000);
+          // metallische Percussion an zufälligen Stellen
+          if (bar >= 4 && Math.random() < 0.18) v.synth(s.perc, t, 1200 + Math.random() * 3000, 0.02, { type: "square", vol: 0.06, cutoff: 6000, glideFrom: 6000, release: 0.05 });
+          if (bar >= 8 && !breakdown) {
+            const n = s.pattern[i];
+            if (n) v.synth(s.lead, t, midiHz(n.note), dur * 0.8, { vol: n.accent ? 0.22 : 0.15, cutoff: 250 + 1200 * (0.5 + 0.5 * Math.sin(step / 20)), q: 16, envAmt: n.accent ? 2200 : 900, release: 0.03 });
+          }
+          // Laser-Sweep alle 8 Takte
+          if (i === 0 && bar % 8 === 6) v.synth(s.fx, t, 90, dur * 14, { type: "sine", vol: 0.12, cutoff: 5000, glideFrom: 2800, release: 1 });
+        }
+      },
+
+      psydub: {
+        bpm: 72,
+        gain: 0.85,
+        init({ makeBus }) {
+          return { kick: makeBus(1, 0, 0.05), rim: makeBus(0.6, 0.5, 0.3), hat: makeBus(0.5, 0.2, 0.1), skank: makeBus(0.4, 0.9, 0.5), bass: makeBus(1, 0, 0.05), siren: makeBus(0.2, 0.9, 0.7) };
+        },
+        step(s, step, t, v, dur) {
+          const bar = Math.floor(step / 16) % 32;
+          const i = step % 16;
+          // One Drop: Kick und Rimshot auf der Drei
+          if (i === 8) {
+            v.kick(s.kick, t, 0.9);
+            v.noiseHit(s.rim, t, 0.35, 0.06, 2200, "bandpass");
+          }
+          if (i % 4 === 2) v.noiseHit(s.hat, t, 0.08, 0.04, 9000);
+          // Skank: kurze Offbeat-Akkorde mit langen Echos (Am – Am – Dm – Em)
+          if (i === 4 || i === 12) {
+            const chord = [[57, 60, 64], [57, 60, 64], [62, 65, 69], [64, 67, 71]][Math.floor(bar / 2) % 4];
+            for (const m of chord) v.synth(s.skank, t, midiHz(m), 0.06, { type: "organ", vol: 0.06, cutoff: 2200, q: 2, release: 0.06 });
+          }
+          // Dub-Bassline über zwei Takte
+          const line = [45, 0, 0, 0, 48, 0, 45, 0, 52, 0, 50, 0, 48, 0, 0, 0, 45, 0, 0, 0, 43, 0, 45, 0, 40, 0, 43, 0, 45, 0, 0, 0];
+          const note = line[step % 32];
+          if (note && bar >= 1) v.synth(s.bass, t, midiHz(note - 12), dur * 3, { type: "triangle", vol: 0.55, cutoff: 320, q: 1, release: 0.15 });
+          // Dub-Sirene, gelegentlich
+          if (i === 0 && bar % 8 === 7) v.synth(s.siren, t, midiHz(76), dur * 12, { type: "sine", vol: 0.07, cutoff: 6000, glideFrom: midiHz(64), release: 1.5 });
+        }
+      },
+
       raga: {
         bpm: 76,
         gain: 2.6,
@@ -2030,6 +2097,77 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
         }
       },
 
+      sixties: {
+        bpm: 112,
+        gain: 1.1,
+        init({ makeBus }) {
+          return {
+            kick: makeBus(1, 0, 0.1), snare: makeBus(0.7, 0.1, 0.3), hat: makeBus(0.5, 0, 0.15), tamb: makeBus(0.4, 0, 0.2),
+            bass: makeBus(0.9, 0, 0.05), organ: makeBus(0.45, 0.2, 0.45), lead: makeBus(0.45, 0.4, 0.4), note: 4
+          };
+        },
+        step(s, step, t, v, dur) {
+          const bar = Math.floor(step / 16) % 32;
+          const i = step % 16;
+          // Rock-Beat mit Tamburin
+          if (i === 0 || i === 8 || i === 10) v.kick(s.kick, t, 0.8);
+          if (i === 4 || i === 12) v.snare(s.snare, t, 0.5);
+          if (i % 2 === 0) v.noiseHit(s.hat, t, 0.07, 0.04, 8500);
+          if (i % 4 === 2 || Math.random() < 0.15) v.noiseHit(s.tamb, t, 0.1, 0.07, 6000, "bandpass");
+          // Spanische Kadenz in E Phrygisch-Dur: E – F – G – F
+          const roots = [40, 41, 43, 41];
+          const root = roots[bar % 4];
+          // Fuzz-Bass-Riff in Achteln
+          if (i % 2 === 0) {
+            const riff = [0, 0, 12, 0, 7, 0, 10, 12];
+            v.synth(s.bass, t, midiHz(root - 12 + riff[(i / 2) % 8]), dur * 1.6, { vol: 0.32, cutoff: 700, q: 1.5, envAmt: 900, release: 0.05 });
+          }
+          // Orgel-Akkord pro Takt (Dur-Dreiklang auf der Wurzel)
+          if (i === 0) for (const offset of [12, 16, 19]) v.synth(s.organ, t, midiHz(root + offset), dur * 15, { type: "organ", vol: 0.07, cutoff: 3500, attack: 0.02, release: 0.2 });
+          // Orgel-Melodie: Zufallsweg in E Phrygisch-Dur (E F G# A B C D)
+          if (bar >= 4 && i % 2 === 0 && Math.random() < 0.55) {
+            s.note = Math.max(0, Math.min(13, s.note + [-2, -1, -1, 1, 1, 2][Math.floor(Math.random() * 6)]));
+            const scale = [0, 1, 4, 5, 7, 8, 10];
+            const m = 64 + scale[s.note % 7] + 12 * Math.floor(s.note / 7);
+            v.synth(s.lead, t, midiHz(m), dur * 1.8, { type: "organ", vol: 0.1, cutoff: 4000, attack: 0.01, release: 0.12 });
+          }
+        }
+      },
+
+      krautrock: {
+        bpm: 124,
+        gain: 1.1,
+        init({ makeBus }) {
+          return { kick: makeBus(1, 0, 0.05), snare: makeBus(0.7, 0.05, 0.25), hat: makeBus(0.5, 0, 0.1), bass: makeBus(0.9, 0, 0), organ: makeBus(0.35, 0.2, 0.7), seq: makeBus(0.4, 0.5, 0.35), motif: null };
+        },
+        step(s, step, t, v, dur) {
+          const bar = Math.floor(step / 16) % 64;
+          const i = step % 16;
+          // Motorik: Kick 1 und 3 (+ Vorschlag), Snare 2 und 4, gleichmäßige Achtel-Hi-Hats
+          if (i === 0 || i === 8 || i === 10) v.kick(s.kick, t, 0.85);
+          if (i === 4 || i === 12) v.snare(s.snare, t, 0.45);
+          if (i % 2 === 0) v.noiseHit(s.hat, t, 0.1, 0.05, 7500);
+          // Em – C – D – Am, je vier Takte
+          const roots = [40, 36, 38, 45];
+          const root = roots[Math.floor(bar / 4) % 4];
+          if (i % 2 === 0) v.synth(s.bass, t, midiHz(root + ((i / 2) % 4 === 3 ? 12 : 0)), dur * 1.5, { vol: 0.36, cutoff: 500, q: 2, envAmt: 700, release: 0.04 });
+          if (i === 0 && bar % 4 === 0) {
+            const triad = root === 45 || root === 40 ? [0, 3, 7] : [0, 4, 7];
+            for (const offset of triad) v.synth(s.organ, t, midiHz(root + 24 + offset), dur * 63, { type: "organ", vol: 0.05, cutoff: 2500, attack: 1.2, release: 1.5 });
+          }
+          // Sequenzer-Motiv in E-Dorisch, alle 8 Takte leicht verändert
+          if (!s.motif || (i === 0 && bar % 8 === 0)) {
+            const scale = [0, 2, 3, 5, 7, 9, 10, 12, 14];
+            s.motif = Array.from({ length: 16 }, (_, k) => (k % 2 === 0 || Math.random() < 0.4 ? scale[Math.floor(Math.random() * scale.length)] : null));
+          }
+          const n = s.motif[i];
+          if (bar >= 8 && n !== null) {
+            const sweep = 600 + 2400 * (0.5 + 0.5 * Math.sin((step / 512) * Math.PI * 2));
+            v.synth(s.seq, t, midiHz(64 + n), dur * 0.5, { type: "sawtooth", vol: 0.08, cutoff: sweep, q: 5, envAmt: 600, release: 0.06 });
+          }
+        }
+      },
+
       kosmos: {
         bpm: 96,
         gain: 2,
@@ -2057,6 +2195,37 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
           if (i % 4 === 0 && bar % 32 >= 2) v.synth(s.sub, t, midiHz(chord[0] - 24), dur * 2, { type: "sine", vol: 0.35, cutoff: 400, release: 0.2 });
           if (Math.random() < 0.03) {
             v.synth(s.bell, t, midiHz(chord[Math.floor(Math.random() * chord.length)] + 24), 0.05, { type: "sine", vol: 0.12, cutoff: 6000, release: 2.5 });
+          }
+        }
+      },
+
+      bowls: {
+        bpm: 60,
+        gain: 3.6,
+        init({ ctx, makeBus, sustained, t0 }) {
+          const drone = makeBus(0.4, 0, 0.6);
+          // Om-Bordun: tiefes C mit leicht verstimmter Oktave, langsam einblendend
+          for (const [freq, vol] of [[65.4, 0.12], [130.8, 0.05], [131.4, 0.04], [196.2, 0.025]]) {
+            const o = ctx.createOscillator();
+            o.frequency.value = freq;
+            const g = ctx.createGain();
+            g.gain.setValueAtTime(0.0001, t0);
+            g.gain.exponentialRampToValueAtTime(vol, t0 + 6);
+            o.connect(g).connect(drone);
+            o.start(t0);
+            sustained.push(o);
+          }
+          return { bowl: makeBus(0.45, 0.1, 0.8), chime: makeBus(0.15, 0.4, 1) };
+        },
+        step(s, step, t, v) {
+          // Klangschalen in C-Pentatonik, ohne festen Takt
+          if (step % 4 === 0 && Math.random() < 0.3) {
+            const bowls = [130.8, 196, 220, 261.6, 293.7, 392];
+            v.bowl(s.bowl, t, bowls[Math.floor(Math.random() * bowls.length)], 0.3, 7 + Math.random() * 4);
+          }
+          if (Math.random() < 0.02) {
+            const chimes = [1046.5, 1174.7, 1318.5, 1568, 1760];
+            v.synth(s.chime, t, chimes[Math.floor(Math.random() * chimes.length)], 0.03, { type: "sine", vol: 0.08, cutoff: 8000, release: 3 });
           }
         }
       }
@@ -2113,6 +2282,9 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
       const noiseData = noise.getChannelData(0);
       for (let i = 0; i < noiseData.length; i += 1) noiseData[i] = Math.random() * 2 - 1;
 
+      // Orgel: Wellenform aus Zugriegel-Obertönen
+      const organWave = ctx.createPeriodicWave(new Float32Array(9), Float32Array.from([0, 1, 0.75, 0.5, 0.2, 0.35, 0, 0.18, 0.12]));
+
       // Bus je Stimme: trocken, Echo und Hall in festen Anteilen
       function makeBus(dryAmount, delayAmount, reverbAmount) {
         const input = ctx.createGain();
@@ -2155,7 +2327,8 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
         },
         synth(bus, t, freq, dur, { type = "sawtooth", vol = 0.3, cutoff = 1200, q = 1, envAmt = 0, attack = 0.005, release = 0.1, detune = 0, glideFrom } = {}) {
           const o = ctx.createOscillator();
-          o.type = type;
+          if (type === "organ") o.setPeriodicWave(organWave);
+          else o.type = type;
           o.detune.value = detune;
           if (glideFrom) {
             o.frequency.setValueAtTime(glideFrom, t);
@@ -2194,6 +2367,25 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
           o.connect(bp).connect(g).connect(bus);
           o.start(t);
           o.stop(t + decay + 0.05);
+        },
+        snare(bus, t, vol) {
+          voice.noiseHit(bus, t, vol, 0.16, 1800, "bandpass");
+          voice.drum(bus, t, 200, 150, vol * 0.5, 0.1);
+        },
+        // Klangschale: unharmonische Teiltöne, jeweils als verstimmtes Paar (Schwebung)
+        bowl(bus, t, freq, vol, decay) {
+          for (const [ratio, amp] of [[1, 1], [2.71, 0.5], [5.15, 0.22], [8.4, 0.1]]) {
+            for (const beat of [-0.8, 0.8]) {
+              const o = ctx.createOscillator();
+              o.frequency.value = freq * ratio + beat * ratio;
+              const g = ctx.createGain();
+              envelope(g.gain, t, vol * amp * 0.5, 0.01, decay / Math.sqrt(ratio));
+              o.connect(g).connect(bus);
+              o.start(t);
+              o.stop(t + decay + 0.1);
+            }
+          }
+          voice.noiseHit(bus, t, vol * 0.15, 0.03, 4000, "bandpass");
         },
         // Trommelfell: Sinus mit optionalem Tonhöhenabfall
         drum(bus, t, freq, dropTo, vol, decay) {
