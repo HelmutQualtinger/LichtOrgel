@@ -38,6 +38,7 @@ Alle Einstellungen befinden sich in der Kopfleiste und werden im Browser gespeic
 | **Flaggenmenü** | Sprache von Oberfläche und Stimme: 🇩🇪 Deutsch, 🇬🇧 English, 🇮🇹 Italiano |
 | **Animation** | Effekt wählen (Wechsel mit Überblendung) |
 | **Thema** | Farbthema wählen (fließender Übergang) |
+| **Klick ins Bild** | Im Mandelbrot-Effekt: angeklickten Punkt als neues Zoomziel wählen |
 
 Rechts zeigt die Leiste das aktive Grafik-Backend und die Bildrate.
 
@@ -78,7 +79,7 @@ Trennt sich ein Mikrofon (Gerätewechsel, Bluetooth, Ruhezustand), verbindet die
 | Galaxie (GPU) | Spiralgalaxie; Bass im Kern, Höhen in den äußeren Armen |
 | Kaleidoskop (GPU) | Zehnfach gespiegelt und siebenfach gefaltet, jede Faltung an ein Band gekoppelt |
 | Plasma (GPU) | Interferenzmuster; Frequenzen und Tempo aus dem Spektrum |
-| Mandelbrot (GPU) | Zoomt bis etwa 10⁻¹⁶ in die Mandelbrot-Menge (oder bis das Bild zu über 90 % schwarz ist), bremst weich ab, zoomt wieder heraus und schwenkt zum nächsten von sieben Misiurewicz-Punkten (Startpunkt per Zufall aus der Uhrzeit) (je Zyklus ca. 3–4 Minuten). 3D-Relief mit Licht von links oben (Normalen aus der mitgeführten Ableitung). Achtstufige Farbtabelle des gewählten Themas (z. B. Hitze bei Glut, Eis bei Ozean, Prisma, Gift), die linear 2-mal über den jeweils sichtbaren Iterationsbereich läuft; der Ton verschiebt die Palette (Lautstärke, weich abklingender Schub bei Bass-Schlägen), die Helligkeit bleibt konstant. Wo die Struktur feiner als ein Pixel ist, steht statt Farbrauschen eine ruhige Mittelfarbe (Distanzschätzung). Referenz-Orbit mit BigInt-Genauigkeit auf der CPU, Pixel per Perturbation auf der GPU, Auflösung passt sich der Bildrate an |
+| Mandelbrot (GPU) | Zoomt bis etwa 10⁻¹⁶ in die Mandelbrot-Menge (oder bis das Bild zu über 90 % schwarz ist bzw. kein Punkt mehr die maximale Iteration erreicht), bremst weich ab, zoomt wieder heraus und schwenkt zum nächsten von sieben Misiurewicz-Punkten (Startpunkt per Zufall aus der Uhrzeit). Ein Klick ins Bild macht den angeklickten Punkt zum neuen Zoomziel, auch in großer Tiefe. 3D-Relief mit Licht von links oben (Normalen aus der mitgeführten Ableitung). Achtstufige Farbtabelle des gewählten Themas (z. B. Hitze bei Glut, Eis bei Ozean, Prisma, Gift), die linear 2-mal über den jeweils sichtbaren Iterationsbereich läuft; der Ton verschiebt die Palette (Lautstärke, weich abklingender Schub bei Bass-Schlägen), die Helligkeit bleibt konstant. Wo die Struktur feiner als ein Pixel ist, steht statt Farbrauschen eine ruhige Mittelfarbe (Distanzschätzung). Referenz-Orbit mit BigInt-Genauigkeit auf der CPU, Pixel per Perturbation auf der GPU, Auflösung passt sich der Bildrate an |
 | Terrain | 3D-Gitterlandschaft aus dem Spektrumsverlauf mit Sonne am Horizont |
 | Blitze | Blitzeinschläge bei Bass-Schlägen und Spitzen in den Höhen |
 
