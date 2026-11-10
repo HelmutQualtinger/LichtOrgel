@@ -546,12 +546,14 @@
       mandel.maxIt = Math.min(orbitMax - 2, Math.round(250 + mandel.depth * 30));
       mandel.check += 1;
       if (mandel.check % 12 === 0) mandelSample(visCanvas.clientWidth / Math.max(1, visCanvas.clientHeight));
-      // Die Palette läuft heatCycles-mal über den sichtbaren Iterationsbereich (weich nachgeführt)
+      // Logarithmische Farbzuordnung: die Palette läuft heatCycles-mal über log(Iterationen) im sichtbaren
+      // Bereich (weich nachgeführt); Farbe = fract(log(mu) · colorK + colorOff)
       const follow = Math.min(1, dt * 1.5);
       mandel.lo += (mandel.loTarget - mandel.lo) * follow;
       mandel.hi += (mandel.hiTarget - mandel.hi) * follow;
-      mandel.colorK = heatCycles / Math.max(24, mandel.hi - mandel.lo);
-      mandel.colorOff = mandel.hue - mandel.lo * mandel.colorK;
+      const logLo = Math.log(Math.max(1, mandel.lo));
+      mandel.colorK = heatCycles / Math.max(0.15, Math.log(Math.max(1, mandel.hi)) - logLo);
+      mandel.colorOff = mandel.hue - logLo * mandel.colorK;
     }
 
     let fx = {};
@@ -1000,7 +1002,7 @@
             if (n < maxIt) {
               const mu = n + 1 - Math.log2(Math.max(1, Math.log(mandelR2) / 2));
               const lv = levelAt((mu * 0.02) % 1);
-              const tri = ((((mu * mandel.colorK + mandel.colorOff + lv * 0.3) % 1) + 1) % 1) * 2;
+              const tri = ((((Math.log(Math.max(1, mu)) * mandel.colorK + mandel.colorOff + lv * 0.3) % 1) + 1) % 1) * 2;
               rgb = heatRgb(tri < 1 ? tri : 2 - tri);
             }
             data[o] = Math.min(255, rgb[0]);
@@ -1227,7 +1229,7 @@ vec4 shade(vec2 fc) {
       // Mandelbrot-Tiefenzoom per Perturbation: Referenz-Orbit Z_m (BigInt, CPU) liegt in der Orbit-Textur,
       // pro Pixel wird nur dz iteriert (dz' = 2·Z·dz + dz² + dc). Rebasing (dz = z, m = 0), sobald |z| < |dz|
       // oder der Orbit endet. float32 reicht für dc bis ca. 1e-36. u[10] = Versatz xy, Maßstab, max. Iterationen;
-      // u[11] = Drehung, Farbschritt pro Iteration, Orbitlänge, Farbversatz (der Ton verschiebt die Farbtabelle, nicht die Helligkeit)
+      // u[11] = Drehung, Farbschritt pro log(Iteration), Orbitlänge, Farbversatz (der Ton verschiebt die Farbtabelle, nicht die Helligkeit)
       Mandelbrot: `
 // Hitze-Palette, gleiche Stützstellen wie heatStops
 vec3 heat(float t) {
@@ -1275,7 +1277,7 @@ vec4 shade(vec2 fc) {
   if (n < maxIt) {
     float mu = n + 1.0 - log2(max(log(r2) * 0.5, 1.0));
     float lv = levelAt(fract(mu * 0.02));
-    float pt = 1.0 - abs(fract(mu * u[11].y + u[11].w + lv * 0.3) * 2.0 - 1.0);
+    float pt = 1.0 - abs(fract(log(max(mu, 1.0)) * u[11].y + u[11].w + lv * 0.3) * 2.0 - 1.0);
     vec3 ext = heat(pt);
     ext = ext + u[7].xyz * exp(-abs(maxIt - mu) * 0.02) * 0.4 * u[7].w;
     col = ext;

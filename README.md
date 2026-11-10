@@ -78,7 +78,7 @@ Trennt sich ein Mikrofon (Gerätewechsel, Bluetooth, Ruhezustand), verbindet die
 | Galaxie (GPU) | Spiralgalaxie; Bass im Kern, Höhen in den äußeren Armen |
 | Kaleidoskop (GPU) | Zehnfach gespiegelt und siebenfach gefaltet, jede Faltung an ein Band gekoppelt |
 | Plasma (GPU) | Interferenzmuster; Frequenzen und Tempo aus dem Spektrum |
-| Mandelbrot (GPU) | Zoomt bis etwa 10⁻¹⁶ in die Mandelbrot-Menge (oder bis das Bild zu über 90 % schwarz ist), bremst weich ab, zoomt wieder heraus und schwenkt zum nächsten von sieben Misiurewicz-Punkten (je Zyklus ca. 3–4 Minuten). Eigene Hitze-Palette (Violett → Rot → Orange → Gelb → Weiß), die 8-mal über den jeweils sichtbaren Iterationsbereich läuft; der Ton verschiebt die Palette (Lautstärke, Bass-Schläge, Frequenzbänder), die Helligkeit bleibt konstant. Referenz-Orbit mit BigInt-Genauigkeit auf der CPU, Pixel per Perturbation auf der GPU, Auflösung passt sich der Bildrate an |
+| Mandelbrot (GPU) | Zoomt bis etwa 10⁻¹⁶ in die Mandelbrot-Menge (oder bis das Bild zu über 90 % schwarz ist), bremst weich ab, zoomt wieder heraus und schwenkt zum nächsten von sieben Misiurewicz-Punkten (je Zyklus ca. 3–4 Minuten). Eigene Hitze-Palette (Violett → Rot → Orange → Gelb → Weiß), die logarithmisch 8-mal über den jeweils sichtbaren Iterationsbereich läuft; der Ton verschiebt die Palette (Lautstärke, Bass-Schläge, Frequenzbänder), die Helligkeit bleibt konstant. Referenz-Orbit mit BigInt-Genauigkeit auf der CPU, Pixel per Perturbation auf der GPU, Auflösung passt sich der Bildrate an |
 | Terrain | 3D-Gitterlandschaft aus dem Spektrumsverlauf mit Sonne am Horizont |
 | Blitze | Blitzeinschläge bei Bass-Schlägen und Spitzen in den Höhen |
 
