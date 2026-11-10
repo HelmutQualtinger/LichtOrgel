@@ -580,14 +580,13 @@
       mandel.maxIt = Math.min(orbitMax - 2, Math.round(250 + mandel.depth * 30));
       mandel.check += 1;
       if (mandel.check % 12 === 0) mandelSample(visCanvas.clientWidth / Math.max(1, visCanvas.clientHeight));
-      // Logarithmische Farbzuordnung: die Palette läuft heatCycles-mal über log(Iterationen) im sichtbaren
-      // Bereich (weich nachgeführt); Farbe = fract(log(mu) · colorK + colorOff)
+      // Lineare Farbzuordnung: die Palette läuft heatCycles-mal über den sichtbaren Iterationsbereich
+      // (weich nachgeführt); Farbe = fract(mu · colorK + colorOff)
       const follow = Math.min(1, dt * 1.5);
       mandel.lo += (mandel.loTarget - mandel.lo) * follow;
       mandel.hi += (mandel.hiTarget - mandel.hi) * follow;
-      const logLo = Math.log(Math.max(1, mandel.lo));
-      mandel.colorK = heatCycles / Math.max(0.15, Math.log(Math.max(1, mandel.hi)) - logLo);
-      mandel.colorOff = mandel.hue - logLo * mandel.colorK;
+      mandel.colorK = heatCycles / Math.max(24, mandel.hi - mandel.lo);
+      mandel.colorOff = mandel.hue - mandel.lo * mandel.colorK;
     }
 
     let fx = {};
@@ -1041,7 +1040,7 @@
             let rgb = [0, 0, 0];
             if (n < maxIt) {
               const mu = n + 1 - Math.log2(Math.max(1, Math.log(mandelR2) / 2));
-              const tri = ((((Math.log(Math.max(1, mu)) * mandel.colorK + mandel.colorOff) % 1) + 1) % 1) * 2;
+              const tri = ((((mu * mandel.colorK + mandel.colorOff) % 1) + 1) % 1) * 2;
               const lit = reliefShade(mandelZ[0], mandelZ[1], mandelDer[0], mandelDer[1]);
               const zl = Math.sqrt(mandelR2);
               const de = (0.5 * zl * Math.log(zl)) / (Math.hypot(mandelDer[0], mandelDer[1]) || 1e-300); // in Pixeln
@@ -1274,7 +1273,7 @@ vec4 shade(vec2 fc) {
       // Mandelbrot-Tiefenzoom per Perturbation: Referenz-Orbit Z_m (BigInt, CPU) liegt in der Orbit-Textur,
       // pro Pixel wird nur dz iteriert (dz' = 2·Z·dz + dz² + dc). Rebasing (dz = z, m = 0), sobald |z| < |dz|
       // oder der Orbit endet. float32 reicht für dc bis ca. 1e-36. u[10] = Versatz xy, Maßstab, max. Iterationen;
-      // u[11] = Drehung, Farbschritt pro log(Iteration), Orbitlänge, Farbversatz (der Ton verschiebt die Farbtabelle, nicht die Helligkeit)
+      // u[11] = Drehung, Farbschritt pro Iteration, Orbitlänge, Farbversatz (der Ton verschiebt die Farbtabelle, nicht die Helligkeit)
       Mandelbrot: `
 // Farbtabelle des Themas: 8 Stützstellen rgb in u[12..17]
 float uf(int k) { return u[12 + k / 4][k % 4]; }
@@ -1322,7 +1321,7 @@ vec4 shade(vec2 fc) {
   vec3 col = background(p) * 0.5;
   if (n < maxIt) {
     float mu = n + 1.0 - log2(max(log(r2) * 0.5, 1.0));
-    float pt = 1.0 - abs(fract(log(max(mu, 1.0)) * u[11].y + u[11].w) * 2.0 - 1.0);
+    float pt = 1.0 - abs(fract(mu * u[11].y + u[11].w) * 2.0 - 1.0);
     float dm = max(max(abs(der.x), abs(der.y)), 1e-30);
     vec2 dn = der / dm;
     vec2 nrm = vec2(z.x * dn.x + z.y * dn.y, z.y * dn.x - z.x * dn.y);
