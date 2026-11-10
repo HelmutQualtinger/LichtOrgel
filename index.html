@@ -2112,7 +2112,7 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
       markPressed(themeSwitch, name);
       document.querySelector("#theme-swatch").style.background = `linear-gradient(135deg, ${t.colors.join(", ")})`;
       saveSetting("lichtorgel-theme", name);
-      if (!analyser) drawVisual();
+      if (!analyser) drawIdle();
     }
     // ---- Effektwechsel mit Überblendung ----
     // Während eines Wechsels laufen alter und neuer Effekt gleichzeitig:
@@ -2154,7 +2154,7 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
       modeTransition = null;
       resetModeState(name);
       selectMode(name);
-      if (!analyser) drawVisual();
+      if (!analyser) drawIdle();
     }
 
     function transitionTo(name) {
@@ -2225,13 +2225,20 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
       gpuCanvas.width = Math.round(visCanvas.clientWidth * gpuRatio);
       gpuCanvas.height = Math.round(visCanvas.clientHeight * gpuRatio);
       particles.length = 0;
-      if (!analyser) drawVisual();
+      if (!analyser) drawIdle();
     }
     new ResizeObserver(() => resizeVisual()).observe(visStage);
+
+    // Ruhebild zeichnen (ohne Audio); ein Fehler in einem Effekt darf den Seitenstart nicht abbrechen
+    function drawIdle() {
+      try { drawVisual(); } catch (error) { console.warn("Zeichnen fehlgeschlagen:", error); }
+    }
 
     function drawVisual(levels) {
       const w = visCanvas.clientWidth;
       const h = visCanvas.clientHeight;
+      // Bühne ohne Größe (z. B. Tab im Hintergrund geladen): nichts zeichnen, sonst entstehen unendliche Maße
+      if (w < 1 || h < 1) return;
       frame += 1;
       for (let i = 0; i < bandCount; i += 1) {
         const target = levels ? (levels[i] - minDb) / (maxDb - minDb) : 0;
@@ -2429,7 +2436,7 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
       }
       audioContext = undefined;
       visLevels.fill(0);
-      drawVisual();
+      drawIdle();
       toggleButton.textContent = tr("start");
       toggleButton.classList.remove("stop");
       toggleButton.disabled = false;
