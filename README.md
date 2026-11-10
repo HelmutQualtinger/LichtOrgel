@@ -62,7 +62,7 @@ Trennt sich ein Mikrofon (Gerätewechsel, Bluetooth, Ruhezustand), verbindet die
 
 ## Effekte
 
-14 Effekte; die mit **GPU** markierten werden als Shader auf der Grafikkarte gerendert.
+15 Effekte; die mit **GPU** markierten werden als Shader auf der Grafikkarte gerendert.
 
 | Effekt | Darstellung |
 |---|---|
@@ -78,6 +78,7 @@ Trennt sich ein Mikrofon (Gerätewechsel, Bluetooth, Ruhezustand), verbindet die
 | Galaxie (GPU) | Spiralgalaxie; Bass im Kern, Höhen in den äußeren Armen |
 | Kaleidoskop (GPU) | Zehnfach gespiegelt und siebenfach gefaltet, jede Faltung an ein Band gekoppelt |
 | Plasma (GPU) | Interferenzmuster; Frequenzen und Tempo aus dem Spektrum |
+| Mandelbrot (GPU) | Endloser Zoom in die Mandelbrot-Menge zu sechs wechselnden Orten; Zoomtempo nach Lautstärke mit Schub bei Bass-Schlägen, Drehung, Farbverlauf und Helligkeit aus dem Spektrum |
 | Terrain | 3D-Gitterlandschaft aus dem Spektrumsverlauf mit Sonne am Horizont |
 | Blitze | Blitzeinschläge bei Bass-Schlägen und Spitzen in den Höhen |
 
