@@ -223,7 +223,9 @@
         errNotFound: "Kein Mikrofon gefunden", errBusy: "Eingang ist bereits anderweitig belegt",
         errDevice: "Gewähltes Eingabegerät ist nicht verfügbar", errNoAudio: "Kein Ton freigegeben – beim Teilen „Audio teilen“ aktivieren",
         errUnsupported: "Dieser Browser kann keinen Computer-Ton aufnehmen", errGeneric: "Audio konnte nicht gestartet werden",
-        groupInputs: "Eingänge", groupMusic: "Psychedelische Musik", srcFile: "Eigene Musikdatei …",
+        groupInputs: "Eingänge", groupMusic: "Internetradio (SomaFM)", srcFile: "Eigene Musikdatei …",
+        groupSynth: "Synthesizer-Loops (im Browser)", groupOwn: "Eigene Musik",
+        synth_goa: "Goa-Trance – 145 BPM", synth_raga: "Raga-Drone mit Sitar & Tabla", synth_kosmos: "Kosmische Reise – Ambient",
         musicConnecting: (n) => `Verbinde mit ${n} …`, musicPlaying: (n) => `♪ ${n}`,
         errStream: (n) => `${n} nicht abspielbar`, clickToPlay: "Zum Abspielen irgendwo klicken",
         musicReconnecting: (n, a) => `${n}: Verbindung unterbrochen – verbinde neu (${a}) …`,
@@ -249,7 +251,9 @@
         errNotFound: "No microphone found", errBusy: "Input is already in use",
         errDevice: "Selected input device is not available", errNoAudio: "No audio shared – enable “Share audio” when sharing",
         errUnsupported: "This browser cannot capture computer sound", errGeneric: "Audio could not be started",
-        groupInputs: "Inputs", groupMusic: "Psychedelic music", srcFile: "Own music file …",
+        groupInputs: "Inputs", groupMusic: "Internet radio (SomaFM)", srcFile: "Own music file …",
+        groupSynth: "Synthesizer loops (in browser)", groupOwn: "Own music",
+        synth_goa: "Goa trance – 145 BPM", synth_raga: "Raga drone with sitar & tabla", synth_kosmos: "Cosmic journey – ambient",
         musicConnecting: (n) => `Connecting to ${n} …`, musicPlaying: (n) => `♪ ${n}`,
         errStream: (n) => `${n} cannot be played`, clickToPlay: "Click anywhere to play",
         musicReconnecting: (n, a) => `${n}: connection lost – reconnecting (${a}) …`,
@@ -276,7 +280,9 @@
         errNotFound: "Nessun microfono trovato", errBusy: "L'ingresso è già in uso",
         errDevice: "Il dispositivo di ingresso scelto non è disponibile", errNoAudio: "Nessun audio condiviso – attiva “Condividi audio”",
         errUnsupported: "Questo browser non può registrare l'audio del computer", errGeneric: "Impossibile avviare l'audio",
-        groupInputs: "Ingressi", groupMusic: "Musica psichedelica", srcFile: "File musicale …",
+        groupInputs: "Ingressi", groupMusic: "Radio online (SomaFM)", srcFile: "File musicale …",
+        groupSynth: "Loop di sintetizzatore (nel browser)", groupOwn: "La tua musica",
+        synth_goa: "Goa trance – 145 BPM", synth_raga: "Raga drone con sitar e tabla", synth_kosmos: "Viaggio cosmico – ambient",
         musicConnecting: (n) => `Connessione a ${n} …`, musicPlaying: (n) => `♪ ${n}`,
         errStream: (n) => `Impossibile riprodurre ${n}`, clickToPlay: "Clicca ovunque per ascoltare",
         musicReconnecting: (n, a) => `${n}: connessione persa – riconnessione (${a}) …`,
@@ -1772,7 +1778,9 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
     let fileUrl;
     let fileName;
     const stationFor = (value) => radioStations.find((s) => `radio:${s.id}` === value);
-    const isMusicSource = (value) => Boolean(stationFor(value)) || value === fileSource;
+    const isSynthSource = (value) => value.startsWith("synth:");
+    const isMusicSource = (value) => Boolean(stationFor(value)) || value === fileSource || isSynthSource(value);
+    let synth;
 
     let lastDevices = [];
     function fillSources(devices = lastDevices) {
@@ -1788,10 +1796,13 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
       if (navigator.mediaDevices?.getDisplayMedia) {
         inputs.append(new Option(tr("srcSystem"), systemSource));
       }
+      const synths = Object.assign(document.createElement("optgroup"), { label: tr("groupSynth") });
+      for (const id of Object.keys(synthPresets)) synths.append(new Option(tr(`synth_${id}`), `synth:${id}`));
       const music = Object.assign(document.createElement("optgroup"), { label: tr("groupMusic") });
       for (const station of radioStations) music.append(new Option(`${station.name} – ${station.genre}`, `radio:${station.id}`));
-      music.append(new Option(fileName ? `♪ ${fileName}` : tr("srcFile"), fileSource));
-      sourceSelect.replaceChildren(inputs, music);
+      const own = Object.assign(document.createElement("optgroup"), { label: tr("groupOwn") });
+      own.append(new Option(fileName ? `♪ ${fileName}` : tr("srcFile"), fileSource));
+      sourceSelect.replaceChildren(inputs, synths, music, own);
       const exists = [...sourceSelect.options].some((o) => o.value === wanted);
       sourceSelect.value = exists ? wanted : "default";
     }
@@ -1875,6 +1886,8 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
       stream?.getTracks().forEach((track) => track.stop());
       stream = undefined;
       musicGain = undefined;
+      synth?.stop();
+      synth = undefined;
       clearInterval(musicWatchdog);
       if (player) {
         player.pause();
@@ -1938,7 +1951,357 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
       drawVisual(levels);
     }
 
+    // ---- Synthesizer-Loops: psychedelische Musik, live im Browser erzeugt (keine Dateien, kein Server) ----
+    const midiHz = (m) => 440 * 2 ** ((m - 69) / 12);
+
+    // Acid-Muster für Goa: 16 Schritte in E-Phrygisch, mit Akzenten und Gleittönen
+    function acidPattern() {
+      const notes = [40, 41, 43, 45, 47, 52, 53, 55];
+      return Array.from({ length: 16 }, () => (Math.random() < 0.7
+        ? { note: notes[Math.floor(Math.random() * notes.length)], accent: Math.random() < 0.3, slide: Math.random() < 0.2 }
+        : null));
+    }
+
+    const synthPresets = {
+      goa: {
+        bpm: 145,
+        gain: 0.9,
+        init({ makeBus }) {
+          return {
+            kick: makeBus(1, 0, 0.05), bass: makeBus(0.9, 0, 0), hat: makeBus(0.6, 0.15, 0.1),
+            acid: makeBus(0.55, 0.35, 0.25), clap: makeBus(0.5, 0.1, 0.35), pad: makeBus(0.3, 0.3, 0.9), pattern: acidPattern()
+          };
+        },
+        step(s, step, t, v, dur) {
+          const bar = Math.floor(step / 16) % 64;
+          const i = step % 16;
+          // Arrangement über 64 Takte: Aufbau, Acid ab Takt 8, Breakdown 40–47, Finale
+          const breakdown = bar >= 40 && bar < 48;
+          if (i === 0 && bar % 16 === 0 && step > 0) s.pattern = acidPattern();
+          if (!breakdown && i % 4 === 0) v.kick(s.kick, t, 0.95);
+          if (!breakdown && i % 4 !== 0) {
+            const note = 28 + (bar % 8 === 7 && i > 11 ? 1 : 0);
+            v.synth(s.bass, t, midiHz(note), dur * 0.8, { vol: 0.42, cutoff: 260 + 140 * Math.sin(step / 64), q: 4, envAmt: 500, release: 0.03 });
+          }
+          if (bar >= 4 && !breakdown) {
+            if (i % 4 === 2) v.noiseHit(s.hat, t, 0.22, 0.12, 7000);
+            else if (bar >= 8) v.noiseHit(s.hat, t, 0.07, 0.03, 9000);
+          }
+          if (bar >= 16 && !breakdown && i % 8 === 4) v.noiseHit(s.clap, t, 0.35, 0.18, 1500, "bandpass");
+          if (breakdown && bar % 4 === 0 && i === 0) {
+            for (const m of [52, 59, 64]) v.synth(s.pad, t, midiHz(m), dur * 64 - 1, { vol: 0.07, cutoff: 1400, attack: 2, release: 3, detune: 7 });
+          }
+          if (bar >= 8) {
+            const n = s.pattern[i];
+            if (n) {
+              const sweep = 350 + 2200 * (0.5 + 0.5 * Math.sin(step / 40));
+              const freq = midiHz(n.note);
+              v.synth(s.acid, t, freq, dur * 0.9, {
+                vol: n.accent ? 0.3 : 0.2, cutoff: sweep, q: 14, envAmt: n.accent ? 2600 : 1200, release: 0.04,
+                glideFrom: n.slide ? s.lastFreq : undefined
+              });
+              s.lastFreq = freq;
+            }
+          }
+        }
+      },
+
+      raga: {
+        bpm: 76,
+        gain: 2.6,
+        init({ ctx, makeBus, sustained, t0 }) {
+          const drone = makeBus(0.35, 0, 0.5);
+          // Bordun: Sa – Pa – Sa' leise und durchgehend
+          for (const [m, vol] of [[37, 0.05], [44, 0.035], [49, 0.03]]) {
+            const o = ctx.createOscillator();
+            o.type = "sawtooth";
+            o.frequency.value = midiHz(m);
+            const f = ctx.createBiquadFilter();
+            f.type = "lowpass";
+            f.frequency.value = 900;
+            const g = ctx.createGain();
+            g.gain.setValueAtTime(0.0001, t0);
+            g.gain.exponentialRampToValueAtTime(vol, t0 + 4);
+            o.connect(f).connect(g).connect(drone);
+            o.start(t0);
+            sustained.push(o);
+          }
+          return { tanpura: makeBus(0.4, 0, 0.6), sitar: makeBus(0.5, 0.35, 0.5), tabla: makeBus(0.8, 0, 0.15), note: 7 };
+        },
+        step(s, step, t, v) {
+          const bar = Math.floor(step / 16) % 48;
+          const i = step % 16;
+          // Tanpura: Pa – Sa' – Sa' – Sa, je eine Viertel
+          if (i % 4 === 0) v.pluck(s.tanpura, t, midiHz(37 + [7, 12, 12, 0][i / 4]), { vol: 0.24, decay: 2.5 });
+          // Sitar: Zufallsweg im Raga Bhairav (Sa re Ga ma Pa dha Ni), gelegentlich mit Gleitton
+          if (bar >= 1 && Math.random() < (i % 4 === 0 ? 0.65 : 0.22)) {
+            s.note = Math.max(0, Math.min(13, s.note + [-2, -1, -1, 0, 1, 1, 2][Math.floor(Math.random() * 7)]));
+            const scale = [0, 1, 4, 5, 7, 8, 11];
+            const m = 61 + scale[s.note % 7] + 12 * Math.floor(s.note / 7);
+            v.pluck(s.sitar, t, midiHz(m), { vol: 0.26, decay: 1.4, bend: Math.random() < 0.25 ? 1 : 0 });
+          }
+          // Tabla im Teental (16 Schläge auf Achteln), ab Takt 2
+          if (bar >= 2 && i % 2 === 0) {
+            const bols = ["dha", "dhin", "dhin", "dha", "dha", "dhin", "dhin", "dha", "dha", "tin", "tin", "ta", "ta", "dhin", "dhin", "dha"];
+            const bol = bols[Math.floor(step / 2) % 16];
+            if (bol.startsWith("dh")) v.drum(s.tabla, t, 110, 70, 0.6, 0.35);
+            v.drum(s.tabla, t, bol.endsWith("in") ? 420 : 340, 0, 0.3, bol.startsWith("t") ? 0.12 : 0.22);
+            v.noiseHit(s.tabla, t, 0.07, 0.02, 3000, "bandpass");
+          }
+        }
+      },
+
+      kosmos: {
+        bpm: 96,
+        gain: 2,
+        init({ makeBus }) {
+          return { pad: makeBus(0.35, 0.15, 0.9), arp: makeBus(0.4, 0.5, 0.45), sub: makeBus(0.8, 0, 0.1), bell: makeBus(0.2, 0.5, 1) };
+        },
+        step(s, step, t, v, dur) {
+          const bar = Math.floor(step / 16);
+          const i = step % 16;
+          // Am9 – Fmaj9 – Cmaj9 – G6/9, je zwei Takte
+          const chords = [[57, 60, 64, 67, 71], [53, 57, 60, 64, 67], [48, 52, 55, 59, 62], [55, 59, 62, 64, 69]];
+          const chord = chords[Math.floor(bar / 2) % chords.length];
+          if (i === 0 && bar % 2 === 0) {
+            for (const m of chord.slice(0, 4)) {
+              for (const detune of [-8, 8]) v.synth(s.pad, t, midiHz(m - 12), dur * 32 - 1, { vol: 0.045, cutoff: 900, q: 0.7, attack: 2.2, release: 3, detune });
+            }
+          }
+          // Arpeggio im Stil der Berliner Schule; der Filter öffnet und schließt sich über 16 Takte
+          if (bar % 32 >= 1) {
+            const order = [0, 2, 1, 3, 4, 2, 3, 1];
+            const m = chord[order[i % 8]] + (i >= 8 ? 12 : 0);
+            const sweep = 500 + 2500 * (0.5 + 0.5 * Math.sin((step / 256) * Math.PI * 2));
+            v.synth(s.arp, t, midiHz(m), dur * 0.6, { type: "square", vol: 0.09, cutoff: sweep, q: 6, envAmt: 800, release: 0.08 });
+          }
+          if (i % 4 === 0 && bar % 32 >= 2) v.synth(s.sub, t, midiHz(chord[0] - 24), dur * 2, { type: "sine", vol: 0.35, cutoff: 400, release: 0.2 });
+          if (Math.random() < 0.03) {
+            v.synth(s.bell, t, midiHz(chord[Math.floor(Math.random() * chord.length)] + 24), 0.05, { type: "sine", vol: 0.12, cutoff: 6000, release: 2.5 });
+          }
+        }
+      }
+    };
+
+    function createSynth(ctx, preset) {
+      const t0 = ctx.currentTime + 0.1;
+      // Summe: Pegelausgleich je Loop → Kompressor → Limiter (Spitzen sicher unter 0 dBFS)
+      const out = ctx.createGain();
+      out.gain.value = 0.9;
+      const limiter = ctx.createDynamicsCompressor();
+      limiter.threshold.value = -3;
+      limiter.knee.value = 0;
+      limiter.ratio.value = 20;
+      limiter.attack.value = 0.002;
+      limiter.release.value = 0.1;
+      limiter.connect(out);
+      const glue = ctx.createDynamicsCompressor();
+      glue.threshold.value = -14;
+      glue.ratio.value = 4;
+      glue.connect(limiter);
+      const comp = ctx.createGain();
+      comp.gain.value = preset.gain ?? 1; // gleicht die Lautstärke der Loops an
+      comp.connect(glue);
+      const dry = ctx.createGain();
+      dry.connect(comp);
+      // Hall: Impulsantwort aus abklingendem Rauschen
+      const reverb = ctx.createConvolver();
+      const irLength = Math.round(ctx.sampleRate * 3.5);
+      const ir = ctx.createBuffer(2, irLength, ctx.sampleRate);
+      for (let c = 0; c < 2; c += 1) {
+        const data = ir.getChannelData(c);
+        for (let i = 0; i < irLength; i += 1) data[i] = (Math.random() * 2 - 1) * (1 - i / irLength) ** 2.5;
+      }
+      reverb.buffer = ir;
+      const reverbIn = ctx.createGain();
+      reverbIn.connect(reverb).connect(comp);
+      // Echo im punktierten Achtel, Rückkopplung gefiltert
+      const delay = ctx.createDelay(2);
+      delay.delayTime.value = (60 / preset.bpm) * 0.75;
+      const feedback = ctx.createGain();
+      feedback.gain.value = 0.42;
+      const tone = ctx.createBiquadFilter();
+      tone.type = "lowpass";
+      tone.frequency.value = 2400;
+      const delayIn = ctx.createGain();
+      delayIn.connect(delay);
+      delay.connect(tone);
+      tone.connect(feedback).connect(delay);
+      tone.connect(comp);
+      tone.connect(reverbIn);
+      // Rauschen für Hi-Hats, Clap und Anschläge
+      const noise = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+      const noiseData = noise.getChannelData(0);
+      for (let i = 0; i < noiseData.length; i += 1) noiseData[i] = Math.random() * 2 - 1;
+
+      // Bus je Stimme: trocken, Echo und Hall in festen Anteilen
+      function makeBus(dryAmount, delayAmount, reverbAmount) {
+        const input = ctx.createGain();
+        for (const [target, amount] of [[dry, dryAmount], [delayIn, delayAmount], [reverbIn, reverbAmount]]) {
+          if (amount <= 0) continue;
+          const sendGain = ctx.createGain();
+          sendGain.gain.value = amount;
+          input.connect(sendGain).connect(target);
+        }
+        return input;
+      }
+
+      const envelope = (param, t, peak, attack, decay) => {
+        param.setValueAtTime(0.0001, t);
+        param.exponentialRampToValueAtTime(peak, t + attack);
+        param.exponentialRampToValueAtTime(0.0001, t + attack + decay);
+      };
+      const voice = {
+        kick(bus, t, vol) {
+          const o = ctx.createOscillator();
+          const g = ctx.createGain();
+          o.frequency.setValueAtTime(150, t);
+          o.frequency.exponentialRampToValueAtTime(45, t + 0.12);
+          envelope(g.gain, t, vol, 0.003, 0.35);
+          o.connect(g).connect(bus);
+          o.start(t);
+          o.stop(t + 0.4);
+        },
+        noiseHit(bus, t, vol, decay, freq, type = "highpass") {
+          const src = ctx.createBufferSource();
+          src.buffer = noise;
+          const f = ctx.createBiquadFilter();
+          f.type = type;
+          f.frequency.value = freq;
+          const g = ctx.createGain();
+          envelope(g.gain, t, vol, 0.002, decay);
+          src.connect(f).connect(g).connect(bus);
+          src.start(t, Math.random() * 0.5);
+          src.stop(t + decay + 0.05);
+        },
+        synth(bus, t, freq, dur, { type = "sawtooth", vol = 0.3, cutoff = 1200, q = 1, envAmt = 0, attack = 0.005, release = 0.1, detune = 0, glideFrom } = {}) {
+          const o = ctx.createOscillator();
+          o.type = type;
+          o.detune.value = detune;
+          if (glideFrom) {
+            o.frequency.setValueAtTime(glideFrom, t);
+            o.frequency.exponentialRampToValueAtTime(freq, t + 0.06);
+          } else {
+            o.frequency.setValueAtTime(freq, t);
+          }
+          const f = ctx.createBiquadFilter();
+          f.type = "lowpass";
+          f.Q.value = q;
+          f.frequency.setValueAtTime(cutoff + envAmt, t);
+          f.frequency.exponentialRampToValueAtTime(Math.max(80, cutoff), t + Math.max(0.05, dur * 0.8));
+          const hold = Math.max(attack, dur);
+          const g = ctx.createGain();
+          g.gain.setValueAtTime(0.0001, t);
+          g.gain.exponentialRampToValueAtTime(vol, t + attack);
+          g.gain.setValueAtTime(vol, t + hold);
+          g.gain.exponentialRampToValueAtTime(0.0001, t + hold + release);
+          o.connect(f).connect(g).connect(bus);
+          o.start(t);
+          o.stop(t + hold + release + 0.05);
+        },
+        // sitarähnlich: Sägezahn durch wanderndes Bandpassfilter, optional Gleitton nach oben
+        pluck(bus, t, freq, { vol = 0.3, decay = 1.2, bend = 0 } = {}) {
+          const o = ctx.createOscillator();
+          o.type = "sawtooth";
+          o.frequency.setValueAtTime(freq, t);
+          if (bend) o.frequency.linearRampToValueAtTime(freq * 2 ** (bend / 12), t + 0.25);
+          const bp = ctx.createBiquadFilter();
+          bp.type = "bandpass";
+          bp.Q.value = 3;
+          bp.frequency.setValueAtTime(freq * 6, t);
+          bp.frequency.exponentialRampToValueAtTime(freq * 2, t + decay);
+          const g = ctx.createGain();
+          envelope(g.gain, t, vol, 0.004, decay);
+          o.connect(bp).connect(g).connect(bus);
+          o.start(t);
+          o.stop(t + decay + 0.05);
+        },
+        // Trommelfell: Sinus mit optionalem Tonhöhenabfall
+        drum(bus, t, freq, dropTo, vol, decay) {
+          const o = ctx.createOscillator();
+          o.frequency.setValueAtTime(freq, t);
+          if (dropTo) o.frequency.exponentialRampToValueAtTime(dropTo, t + decay * 0.5);
+          const g = ctx.createGain();
+          envelope(g.gain, t, vol, 0.002, decay);
+          o.connect(g).connect(bus);
+          o.start(t);
+          o.stop(t + decay + 0.05);
+        }
+      };
+
+      const sustained = [];
+      const state = preset.init({ ctx, makeBus, sustained, t0 });
+      const stepDur = 60 / preset.bpm / 4;
+      let step = 0;
+      let next = t0;
+      // Vorausplanung auf der Audio-Uhr; im Hintergrund drosseln Browser Timer, daher weiter voraus
+      const timer = setInterval(() => {
+        const horizon = ctx.currentTime + (document.hidden ? 1.5 : 0.2);
+        while (next < horizon) {
+          preset.step(state, step, next, voice, stepDur);
+          step += 1;
+          next += stepDur;
+        }
+      }, 25);
+
+      return {
+        output: out,
+        stop() {
+          clearInterval(timer);
+          for (const o of sustained) o.stop();
+          out.disconnect();
+        }
+      };
+    }
+
+    async function startSynth(source) {
+      const id = source.slice("synth:".length);
+      const name = tr(`synth_${id}`);
+      toggleButton.disabled = true;
+      try {
+        audioContext = new AudioContext({ latencyHint: "interactive" });
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = 1024;
+        analyser.smoothingTimeConstant = 0;
+        musicGain = audioContext.createGain();
+        analyser.connect(musicGain).connect(audioContext.destination);
+        synth = createSynth(audioContext, synthPresets[id]);
+        synth.output.connect(analyser);
+        sourceNode = synth.output;
+        levelOffsetDb = systemOffsetDb;
+        stream = new MediaStream(); // leerer Merker „Audio läuft“
+        await Promise.race([audioContext.resume(), new Promise((resolve) => setTimeout(resolve, 300))]);
+        toggleButton.textContent = tr("stop");
+        toggleButton.classList.add("stop");
+        toggleButton.disabled = false;
+        drawLevels();
+        if (audioContext.state === "running") {
+          setStatus("musicPlaying", true, name);
+          return;
+        }
+        // Ohne vorherige Interaktion startet der Browser keinen Ton: auf den ersten Klick warten
+        setStatus("clickToPlay", true);
+        const context = audioContext;
+        const unlock = () => {
+          removeEventListener("pointerdown", unlock, true);
+          removeEventListener("keydown", unlock, true);
+          if (context !== audioContext) return;
+          void context.resume().then(() => {
+            setStatus("musicPlaying", true, name);
+            speakNext();
+          });
+        };
+        addEventListener("pointerdown", unlock, true);
+        addEventListener("keydown", unlock, true);
+      } catch (error) {
+        console.error("Synthesizer:", error);
+        stopAudio();
+        setStatus("errGeneric");
+      }
+    }
+
     async function startMusic(source) {
+      if (isSynthSource(source)) return startSynth(source);
       const station = stationFor(source);
       if (!station && !fileUrl) {
         fileInput.click();
@@ -2178,7 +2541,7 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
         };
         addEventListener("pointerdown", speakOnGesture, true);
         addEventListener("keydown", speakOnGesture, true);
-      } else {
+      } else if (!isSynthSource(sourceSelect.value)) {
         waitForGesture();
       }
     }

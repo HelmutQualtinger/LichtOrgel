@@ -2,7 +2,7 @@
 
 ![LichtOrgel – psychedelisches Regenbogen-Mandala mit funkelnden Diamanten und dem Schriftzug „Lucy in the Sky with Diamonds“](og-image.jpg)
 
-Eine Lichtorgel im Browser: Audio von Mikrofon, Computer, psychedelischem Internetradio oder einer eigenen Musikdatei wird in zehn Frequenzbänder zerlegt und in Echtzeit als Animation dargestellt. Oberfläche und Stimme gibt es auf Deutsch, Englisch und Italienisch. Die gesamte Anwendung ist eine einzelne Datei (`index.html`) ohne Abhängigkeiten und ohne Build-Schritt.
+Eine Lichtorgel im Browser: Audio von Mikrofon, Computer, im Browser erzeugten Synthesizer-Loops, psychedelischem Internetradio oder einer eigenen Musikdatei wird in zehn Frequenzbänder zerlegt und in Echtzeit als Animation dargestellt. Oberfläche und Stimme gibt es auf Deutsch, Englisch und Italienisch. Die gesamte Anwendung ist eine einzelne Datei (`index.html`) ohne Abhängigkeiten und ohne Build-Schritt.
 
 **Live:** https://helmutqualtinger.github.io/LichtOrgel/
 
@@ -22,7 +22,7 @@ Alle Einstellungen befinden sich in der Kopfleiste und werden im Browser gespeic
 
 | Element | Funktion |
 |---|---|
-| **Quelle** | Mikrofon, Eingabegerät, Computer-Ton, psychedelischer Radiosender oder eigene Musikdatei |
+| **Quelle** | Mikrofon, Eingabegerät, Computer-Ton, Synthesizer-Loop, psychedelischer Radiosender oder eigene Musikdatei |
 | **Start / Stopp** | Audio ein- und ausschalten |
 | **Auto** | Geht automatisch der Reihe nach durch Effekte und Farbthemen |
 | **Stimme** | Im Auto-Modus spricht eine weibliche Stimme bei jedem Farbwechsel einen Spruch |
@@ -38,7 +38,11 @@ Rechts zeigt die Leiste das aktive Grafik-Backend und die Bildrate.
 - **Eingabegerät** – jedes erkannte Audio-Eingabegerät. Die Namen erscheinen nach der ersten Mikrofonfreigabe. Ein Loopback-Gerät wie [BlackHole](https://github.com/ExistentialAudio/BlackHole) leitet den Computer-Ton in jedem Browser als Eingang weiter.
 - **Computer-Ton** – über die Bildschirm- bzw. Tab-Freigabe; im Dialog **„Audio teilen“** aktivieren. Nur Chrome und Edge; Systemton auf macOS erst in neueren Versionen, Tab-Ton immer. Das Signal wird um 20 dB abgesenkt, da es deutlich lauter ist als ein Mikrofon.
 
-- **Psychedelische Musik** – sechs Sender von [SomaFM](https://somafm.com), einem werbefreien, hörerfinanzierten Internetradio: The Trip (Progressive, Trance), Suburbs of Goa (Goa, Asian Beats), Space Station Soma (Space-Electronica), Deep Space One (Deep Ambient), Drone Zone (Ambient-Drones) und Synphaera (Space Ambient). Die Musik ist hörbar und steuert zugleich die Visualisierung.
+- **Synthesizer-Loops** – psychedelische Musik, die der Browser selbst erzeugt, ohne Dateien oder Server. Die Loops sind generativ und wiederholen sich nie exakt:
+  - *Goa-Trance* (145 BPM) – Kick, rollender Bass, Acid-Lead mit Resonanzfilter und Gleittönen, Hi-Hats; 64-Takt-Arrangement mit Breakdown
+  - *Raga-Drone* (76 BPM) – Bordun, Tanpura, sitarähnliche Melodie im Raga Bhairav, Tabla im Teental
+  - *Kosmische Reise* (96 BPM) – Akkordflächen, Arpeggio im Stil der Berliner Schule mit Filterfahrt, Sub-Bass, Glocken
+- **Internetradio** – sechs Sender von [SomaFM](https://somafm.com), einem werbefreien, hörerfinanzierten Internetradio: The Trip (Progressive, Trance), Suburbs of Goa (Goa, Asian Beats), Space Station Soma (Space-Electronica), Deep Space One (Deep Ambient), Drone Zone (Ambient-Drones) und Synphaera (Space Ambient). Die Musik ist hörbar und steuert zugleich die Visualisierung.
 - **Eigene Musikdatei** – öffnet die Dateiauswahl; die Datei wird lokal im Browser abgespielt und in Schleife wiederholt.
 
 Trennt sich ein Mikrofon (Gerätewechsel, Bluetooth, Ruhezustand), verbindet die Seite automatisch neu und weicht bei Bedarf auf das Standard-Mikrofon aus.
