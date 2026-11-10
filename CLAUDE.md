@@ -57,7 +57,9 @@ Shaders are written **once** in a restricted GLSL subset (`shaderLib` + each `gp
 - helper functions must be defined before use (GLSL order)
 - avoid GLSL/WGSL reserved words as identifiers (e.g. `half`, `sample`, `filter`, `in`, `out`)
 
-Uniforms are one `vec4 u[10]` array (layout documented in the comment above `shaderLib`); `renderGpu()` fills it. After changing a shader, verify it compiles under **both** `?gpu=webgpu` and `?gpu=webgl`.
+Uniforms are one `vec4 u[12]` array (layout documented in the comment above `shaderLib`); `renderGpu()` fills it. Both preambles also provide `orbitAt(int i)`, reading an RG32F 1024×4 texture (WebGPU binding 1, WebGL texture unit 0).
+
+Mandelbrot deep zoom (to ~1e-30): `mandelSpots` are Misiurewicz points as 50-digit strings; `referenceOrbit()` iterates the target with BigInt fixed point (200 bits) on the CPU, the backends upload `mandel.ref.f32` into the orbit texture when `mandel.version` changes, and the shader (and the 2D fallback, in doubles) iterates only the per-pixel delta (perturbation) with rebasing when |z| < |dz| or the reference orbit ends. `mandelStep()` advances the zoom once per frame; u[10..11] carry offset, scale, max iterations, rotation, fade and orbit length. float32 deltas stop working below ~1e-36, so don't push `mandelDepth` much past 30. After changing a shader, verify it compiles under **both** `?gpu=webgpu` and `?gpu=webgl`.
 
 ### Languages (UI and voice)
 

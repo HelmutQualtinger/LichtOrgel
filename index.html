@@ -392,9 +392,77 @@
       ctx.shadowBlur = blur;
     }
 
-    // Zielorte für den Mandelbrot-Zoom (bleiben bis zur tiefsten Stufe am Rand der Menge)
-    const mandelSpots = [[-0.743643887, 0.131825904], [-1.25066, 0.02012], [0.2549870375, -0.0005679790],
-      [-1.768778833, -0.001738996], [0.360240443, -0.641313061], [-0.235125, 0.827215]];
+    // ---- Mandelbrot-Tiefenzoom (bis ca. 1e-30) ----
+    // Ziele sind Misiurewicz-Punkte (vorab mit 70 Stellen berechnet), die in jeder Tiefe Struktur zeigen.
+    // Die CPU rechnet am Ziel einen Referenz-Orbit mit BigInt-Festkomma (200 Bit); GPU bzw. 2D-Modus
+    // rechnen pro Pixel nur die Abweichung davon (Perturbation, Rebasing gegen Glitches).
+    const mandelSpots = [
+      ["-0.74329189085243020293162432597251075717634855812078", "0.13124055230879760477084590658147814307711415115858"],
+      ["0.25502117476483517156124940147724106261231217672739", "-0.00052952701737733847596414703567743953590579500420218"],
+      ["-0.10109636384562216102578544573862256546380544282625", "0.95628651080914150077109605772997743580983333651053"],
+      ["-0.7756837680090537974694835039347410457282465046158", "0.13646736829469012473327440961784876519777211159247"],
+      ["0.4245127190500396424424722141718902374328811956333", "0.20753022816674530250607348224391828017799698584699"],
+      ["-1.7704212973070454434835101106613213727817043473918", "0.0051195002056617660718120592823014334308887069267422"],
+      ["0.0016429555471499090057645804958991985039939880610133", "-0.82246653001909136706609518709147109374940163546361"]
+    ];
+    const mandelDepth = 30.6; // Zehnerpotenzen pro Zoomfahrt: 2,6 → ca. 6e-31
+    const orbitMax = 4096;    // = Orbit-Textur 1024 × 4
+    const fixBits = 200n;
+    function toFixed(str) {
+      const [ip, fp = ""] = str.replace("-", "").split(".");
+      const v = (BigInt(ip + fp) << fixBits) / 10n ** BigInt(fp.length);
+      return str.startsWith("-") ? -v : v;
+    }
+    const fixedToNum = (v) => Number(v >> (fixBits - 60n)) / 2 ** 60;
+    function referenceOrbit(spot) {
+      const cx = toFixed(spot[0]);
+      const cy = toFixed(spot[1]);
+      const limit = 16n << fixBits;
+      const orbit = new Float64Array(orbitMax * 2);
+      let x = 0n;
+      let y = 0n;
+      let n = 1;
+      for (; n < orbitMax; n += 1) {
+        const x2 = (x * x) >> fixBits;
+        const y2 = (y * y) >> fixBits;
+        if (x2 + y2 > limit) break;
+        y = ((x * y) >> (fixBits - 1n)) + cy;
+        x = x2 - y2 + cx;
+        orbit[n * 2] = fixedToNum(x);
+        orbit[n * 2 + 1] = fixedToNum(y);
+      }
+      return { orbit, f32: Float32Array.from(orbit), length: n, center: [fixedToNum(cx), fixedToNum(cy)] };
+    }
+    const orbitCache = new Map();
+    function orbitFor(i) {
+      if (!orbitCache.has(i)) orbitCache.set(i, referenceOrbit(mandelSpots[i]));
+      return orbitCache.get(i);
+    }
+    const mandel = { zt: 0, rot: 0, last: 0, spot: -1, ref: null, version: 0, offX: 0, offY: 0, scale: 2.6, maxIt: 200, fade: 1 };
+    function mandelStep(s) {
+      const now = performance.now();
+      if (now === mandel.last) return;
+      const dt = mandel.last ? Math.min(0.1, (now - mandel.last) / 1000) : 0;
+      mandel.last = now;
+      // ca. 70–110 s pro Zoomfahrt, schneller bei Lautstärke, Schub bei Bass-Schlägen
+      mandel.zt += dt * (0.009 + s.overall * 0.014) + (s.beat ? 0.0012 : 0);
+      mandel.rot += dt * (0.05 + s.overall * 0.4);
+      const cyc = mandel.zt % 1;
+      const idx = Math.floor(mandel.zt) % mandelSpots.length;
+      if (idx !== mandel.spot) {
+        mandel.spot = idx;
+        mandel.ref = orbitFor(idx);
+        mandel.version += 1;
+        setTimeout(() => orbitFor((idx + 1) % mandelSpots.length), 1000); // nächsten Orbit vorbereiten
+      }
+      const e = Math.min(1, cyc / 0.04);
+      const ease = 1 - e * e * (3 - 2 * e);
+      mandel.offX = (-0.6 - mandel.ref.center[0]) * ease;
+      mandel.offY = -mandel.ref.center[1] * ease;
+      mandel.scale = 2.6 * 10 ** (-cyc * mandelDepth) * (1 - s.bass * 0.08);
+      mandel.maxIt = Math.min(orbitMax - 2, Math.round(200 + cyc * mandelDepth * 40));
+      mandel.fade = Math.min(1, cyc / 0.015, (1 - cyc) / 0.015);
+    }
 
     let fx = {};
     let flash = 0;
@@ -817,52 +885,53 @@
         ctx.drawImage(fx.plasma, 0, 0, w, h);
       },
 
-      // Mandelbrot: endloser Zoom zu wechselnden Orten am Rand der Menge; Farben laufen mit der Musik
+      // Mandelbrot: Tiefenzoom bis ca. 1e-30 per Perturbation (Canvas-2D-Variante mit geringerer Auflösung)
       Mandelbrot(ctx, w, h, t, s) {
-        const pw = 160;
+        mandelStep(s);
+        const pw = 96;
         const ph = Math.max(1, Math.round((pw * h) / w));
         if (!fx.img || fx.img.height !== ph) {
           fx.img = Object.assign(document.createElement("canvas"), { width: pw, height: ph });
           fx.image = fx.img.getContext("2d").createImageData(pw, ph);
         }
-        fx.zt = (fx.zt ?? 0) + 0.0005 + s.overall * 0.0005 + (s.beat ? 0.0012 : 0);
-        fx.rot = (fx.rot ?? 0) + 0.001 + s.overall * 0.01;
-        const cyc = fx.zt % 1;
-        const [tx, ty] = mandelSpots[Math.floor(fx.zt) % mandelSpots.length];
-        const ease = 1 - Math.min(1, cyc / 0.25) ** 2 * (3 - 2 * Math.min(1, cyc / 0.25));
-        const cx = tx + (-0.6 - tx) * ease;
-        const cy = ty + (0 - ty) * ease;
-        const scale = 2.6 * Math.exp(-cyc * 9.5) * (1 - s.bass * 0.08) / Math.min(pw, ph);
-        const maxIt = Math.round(80 + cyc * 160);
-        const ca = Math.cos(fx.rot);
-        const sa = Math.sin(fx.rot);
-        const dim = Math.min(1, cyc / 0.04, (1 - cyc) / 0.04);
-        const shift = performance.now() / 1000 * 0.06 + fx.zt * 2;
+        const { orbit, length: olen } = mandel.ref;
+        const maxIt = Math.min(mandel.maxIt, 450);
+        const sc = mandel.scale / Math.min(pw, ph);
+        const ca = Math.cos(mandel.rot) * sc;
+        const sa = Math.sin(mandel.rot) * sc;
+        const shift = (performance.now() / 1000) * 0.06 + mandel.zt * 2;
         const data = fx.image.data;
         let o = 0;
         for (let y = 0; y < ph; y += 1) {
           for (let x = 0; x < pw; x += 1) {
-            const px = (x - pw / 2) * scale;
-            const py = (y - ph / 2) * scale;
-            const cr = cx + px * ca - py * sa;
-            const ci = cy + px * sa + py * ca;
-            let zr = 0;
-            let zi = 0;
+            const px = x - pw / 2;
+            const py = y - ph / 2;
+            const dcx = mandel.offX + px * ca - py * sa;
+            const dcy = mandel.offY + px * sa + py * ca;
+            let dx = 0;
+            let dy = 0;
+            let m = 0;
             let n = 0;
             let r2 = 0;
             while (n < maxIt) {
-              const nr = zr * zr - zi * zi + cr;
-              zi = 2 * zr * zi + ci;
-              zr = nr;
-              r2 = zr * zr + zi * zi;
+              const zx = orbit[m * 2];
+              const zy = orbit[m * 2 + 1];
+              const nx = 2 * (zx * dx - zy * dy) + dx * dx - dy * dy + dcx;
+              dy = 2 * (zx * dy + zy * dx) + 2 * dx * dy + dcy;
+              dx = nx;
+              m += 1;
+              const ax = orbit[m * 2] + dx;
+              const ay = orbit[m * 2 + 1] + dy;
+              r2 = ax * ax + ay * ay;
               if (r2 > 256) break;
               n += 1;
+              if (r2 < dx * dx + dy * dy || m >= olen - 1) { dx = ax; dy = ay; m = 0; }
             }
             let rgb = [0, 0, 0];
             if (n < maxIt) {
-              const mu = n + 1 - Math.log2(Math.log(r2) / 2);
+              const mu = n + 1 - Math.log2(Math.max(1, Math.log(r2) / 2));
               const pt = 1 - Math.abs(((mu * 0.045 + shift) % 1) * 2 - 1);
-              const k = (0.35 + levelAt((mu * 0.02) % 1) * 1.3) * dim;
+              const k = (0.35 + levelAt((mu * 0.02) % 1) * 1.3) * mandel.fade;
               rgb = rgbAt(t.colors, pt).map((c) => c * k);
             }
             data[o] = Math.min(255, rgb[0]);
@@ -976,6 +1045,7 @@
     //   u[0] = Auflösung x, y, Zeit, Flash      u[1..3] = Bänder 0–9, Bass, Gesamt
     //   u[4..6] = Themenfarben rgb + Mitten / Höhen / Puls   u[7] = Kernfarbe rgb + Glow
     //   u[8] = Hintergrund innen rgb + Drehung   u[9] = Hintergrund außen rgb + Fahrt
+    //   u[10..11] = Mandelbrot-Zoom (siehe dort); orbitAt(i) liest den Referenz-Orbit aus der Orbit-Textur
     const shaderLib = `
 float level(int i) { return u[1 + i / 4][i % 4]; }
 float levelAt(float x) {
@@ -1085,53 +1155,50 @@ vec4 shade(vec2 fc) {
   col = 1.0 - exp(-col * 1.2);
   return vec4(col, 1.0);
 }`,
-      // Mandelbrot: Zoom zu sechs Orten nacheinander (Tiefe ca. 1:13000, Grenze der 32-Bit-Genauigkeit),
-      // Zoomtempo aus Zeit + Fahrt, Drehung aus u[8].w, Farbverlauf und Helligkeit aus den Bändern
+      // Mandelbrot-Tiefenzoom per Perturbation: Referenz-Orbit Z_m (BigInt, CPU) liegt in der Orbit-Textur,
+      // pro Pixel wird nur dz iteriert (dz' = 2·Z·dz + dz² + dc). Rebasing (dz = z, m = 0), sobald |z| < |dz|
+      // oder der Orbit endet. float32 reicht für dc bis ca. 1e-36. u[10] = Versatz xy, Maßstab, max. Iterationen;
+      // u[11] = Drehung, Abblendung, Orbitlänge
       Mandelbrot: `
-vec2 mbSpot(float k) {
-  if (k < 0.5) { return vec2(-0.743643887, 0.131825904); }
-  if (k < 1.5) { return vec2(-1.25066, 0.02012); }
-  if (k < 2.5) { return vec2(0.2549870375, -0.0005679790); }
-  if (k < 3.5) { return vec2(-1.768778833, -0.001738996); }
-  if (k < 4.5) { return vec2(0.360240443, -0.641313061); }
-  return vec2(-0.235125, 0.827215);
-}
 vec4 shade(vec2 fc) {
   vec2 res = u[0].xy;
   vec2 p = (fc - res * 0.5) / min(res.x, res.y);
   float tme = u[0].z;
   float bass = u[3].z;
-  float zt = tme * 0.03 + u[9].w * 0.008;
-  float cyc = fract(zt);
-  vec2 spot = mbSpot(fmod(floor(zt), 6.0));
-  float ease = 1.0 - smoothstep(0.0, 0.25, cyc);
-  vec2 center = spot + (vec2(-0.6, 0.0) - spot) * ease;
-  float scale = 2.6 * exp(-cyc * 9.5) * (1.0 - bass * 0.08);
-  float ang = u[8].w * 0.5;
-  float ca = cos(ang);
-  float sa = sin(ang);
-  vec2 c = center + vec2(p.x * ca - p.y * sa, p.x * sa + p.y * ca) * scale;
+  float maxIt = u[10].w;
+  int olen = int(u[11].z);
+  float ca = cos(u[11].x);
+  float sa = sin(u[11].x);
+  vec2 dc = u[10].xy + vec2(p.x * ca - p.y * sa, p.x * sa + p.y * ca) * u[10].z;
+  vec2 dz = vec2(0.0, 0.0);
+  vec2 zr = vec2(0.0, 0.0);
   vec2 z = vec2(0.0, 0.0);
+  int m = 0;
   float n = 0.0;
   float r2 = 0.0;
-  float maxIt = 90.0 + cyc * 260.0;
-  for (int i = 0; i < 350; i++) {
-    z = vec2(z.x * z.x - z.y * z.y, 2.0 * z.x * z.y) + c;
+  for (int i = 0; i < 4096; i++) {
+    dz = vec2(2.0 * (zr.x * dz.x - zr.y * dz.y) + dz.x * dz.x - dz.y * dz.y, 2.0 * (zr.x * dz.y + zr.y * dz.x) + 2.0 * dz.x * dz.y) + dc;
+    m = m + 1;
+    zr = orbitAt(m);
+    z = zr + dz;
     r2 = dot(z, z);
     if (r2 > 256.0) { break; }
     n = n + 1.0;
     if (n >= maxIt) { break; }
+    if (max(abs(z.x), abs(z.y)) < max(abs(dz.x), abs(dz.y)) || m >= olen - 1) {
+      dz = z;
+      m = 0;
+      zr = vec2(0.0, 0.0);
+    }
   }
-  float fade = smoothstep(0.0, 0.04, cyc) * (1.0 - smoothstep(0.96, 1.0, cyc));
   vec3 col = background(p) * 0.5 + palette(0.0) * bass * 0.25;
   if (n < maxIt) {
     float mu = n + 1.0 - log2(max(log(r2) * 0.5, 1.0));
     float pt = 1.0 - abs(fract(mu * 0.045 + tme * 0.06 + u[9].w * 0.01) * 2.0 - 1.0);
     float lv = levelAt(fract(mu * 0.02));
     vec3 ext = palette(pt) * (0.35 + lv * 1.3 + u[6].w * 0.4);
-    float edge = pow(clamp(mu / maxIt, 0.0, 1.0), 2.0);
-    ext = ext + u[7].xyz * edge * (0.4 + bass) * u[7].w;
-    col = mix(col, ext, fade);
+    ext = ext + u[7].xyz * exp(-abs(maxIt - mu) * 0.02) * (0.3 + bass) * u[7].w;
+    col = mix(col, ext, u[11].y);
   }
   col = 1.0 - exp(-col * 1.3);
   return vec4(col, 1.0);
@@ -1188,8 +1255,10 @@ vec4 shade(vec2 fc) {
     }
 
     const wgslHead = `
-struct U { v: array<vec4f, 10> };
+struct U { v: array<vec4f, 12> };
 @group(0) @binding(0) var<uniform> uu: U;
+@group(0) @binding(1) var orbitTex: texture_2d<f32>;
+fn orbitAt(i: i32) -> vec2f { return textureLoad(orbitTex, vec2i(i % 1024, i / 1024), 0).xy; }
 fn fmod(a: f32, b: f32) -> f32 { return a - b * floor(a / b); }
 @vertex fn vs(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {
   var pts = array<vec2f, 3>(vec2f(-1.0, -1.0), vec2f(3.0, -1.0), vec2f(-1.0, 3.0));
@@ -1203,10 +1272,12 @@ void main() {
 }`;
     const glslHead = `#version 300 es
 precision highp float;
-uniform vec4 u[10];
+uniform vec4 u[12];
+uniform highp sampler2D orbitTex;
 out vec4 outColor;
 float fmod(float a, float b) { return a - b * floor(a / b); }
 float atan2(float y, float x) { return atan(y, x); }
+vec2 orbitAt(int i) { return texelFetch(orbitTex, ivec2(i % 1024, i / 1024), 0).xy; }
 `;
     const glslTail = `
 void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }`;
@@ -1214,7 +1285,7 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
     const visStage = document.querySelector("#vis-stage");
     const backendLabel = document.querySelector("#backend");
     let gpuCanvas = document.querySelector("#visual-gpu");
-    const gpuUniforms = new Float32Array(40);
+    const gpuUniforms = new Float32Array(48);
     const gpuState = { rot: 0, travel: 0, pulse: 0, start: performance.now() };
     let gpu = null;
     let gpuActive = false;
@@ -1234,7 +1305,10 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
       if (!adapter) return null;
       const device = await adapter.requestDevice();
       const format = navigator.gpu.getPreferredCanvasFormat();
-      const layout = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: GPUShaderStage.FRAGMENT, buffer: {} }] });
+      const layout = device.createBindGroupLayout({ entries: [
+        { binding: 0, visibility: GPUShaderStage.FRAGMENT, buffer: {} },
+        { binding: 1, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "unfilterable-float" } }
+      ] });
       const pipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [layout] });
       const pipelines = {};
       const blendPipelines = {};
@@ -1261,7 +1335,9 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
         }).then((pipeline) => { blendPipelines[name] = pipeline; }, (error) => console.warn("Blend-Pipeline:", error));
       }
       const buffer = device.createBuffer({ size: gpuUniforms.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-      const bindGroup = device.createBindGroup({ layout, entries: [{ binding: 0, resource: { buffer } }] });
+      const orbitTex = device.createTexture({ size: [1024, 4], format: "rg32float", usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
+      let orbitVersion = -1;
+      const bindGroup = device.createBindGroup({ layout, entries: [{ binding: 0, resource: { buffer } }, { binding: 1, resource: orbitTex.createView() }] });
       if (isCancelled()) { device.destroy(); return null; }
       const context = gpuCanvas.getContext("webgpu");
       context.configure({ device, format, alphaMode: "opaque" });
@@ -1274,6 +1350,10 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
         // name deckend zeichnen; optional next mit Anteil mix darüberblenden
         render(name, next, mix) {
           device.queue.writeBuffer(buffer, 0, gpuUniforms);
+          if (mandel.ref && orbitVersion !== mandel.version) {
+            device.queue.writeTexture({ texture: orbitTex }, mandel.ref.f32, { bytesPerRow: 1024 * 8 }, [1024, 4]);
+            orbitVersion = mandel.version;
+          }
           const encoder = device.createCommandEncoder();
           const pass = encoder.beginRenderPass({
             colorAttachments: [{ view: context.getCurrentTexture().createView(), loadOp: "clear", storeOp: "store", clearValue: { r: 0, g: 0, b: 0, a: 1 } }]
@@ -1318,6 +1398,13 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
         programs[name] = { program, location: gl.getUniformLocation(program, "u") };
       }
       gl.bindVertexArray(gl.createVertexArray());
+      // Orbit-Textur (Referenz-Orbit für den Mandelbrot-Zoom) auf Einheit 0, wo alle sampler2D standardmäßig lesen
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, gl.createTexture());
+      gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RG32F, 1024, 4);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+      let orbitVersion = -1;
       return {
         kind: "WebGL2",
         render(name, next, mix) {
@@ -1328,6 +1415,10 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
             gl.drawArrays(gl.TRIANGLES, 0, 3);
           };
           gl.viewport(0, 0, gpuCanvas.width, gpuCanvas.height);
+          if (mandel.ref && orbitVersion !== mandel.version) {
+            gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 1024, 4, gl.RG, gl.FLOAT, mandel.ref.f32);
+            orbitVersion = mandel.version;
+          }
           draw(name);
           if (next) {
             gl.enable(gl.BLEND);
@@ -1382,6 +1473,10 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
       U.set([...hexRgb(t.core), t.glow / 20], 28);
       U.set([...hexRgb(t.bg[0]), gpuState.rot], 32);
       U.set([...hexRgb(t.bg[1]), gpuState.travel], 36);
+      if (name === "Mandelbrot" || next === "Mandelbrot") {
+        mandelStep(s);
+        U.set([mandel.offX, mandel.offY, mandel.scale, mandel.maxIt, mandel.rot, mandel.fade, mandel.ref.length, 0], 40);
+      }
       gpu.render(name, next, mix);
     }
 
