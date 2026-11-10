@@ -566,10 +566,10 @@
     }
     // Auswertung des fertig gerenderten Bildes in voller Auflösung (GPU-Readback bzw. 2D-Bild):
     // Innenpixel (maximale Iteration erreicht) sind exakt schwarz, alle anderen nicht.
-    function mandelReport(blackPixels, totalPixels) {
-      if (mandel.phase !== "in" || !totalPixels) return;
-      mandel.black = blackPixels / totalPixels;
-      if (blackPixels > 0) mandel.noBlackSince = 0;
+    function mandelReport(share, any) {
+      if (mandel.phase !== "in") return;
+      mandel.black = share;
+      if (any) mandel.noBlackSince = 0;
       else if (!mandel.noBlackSince) mandel.noBlackSince = performance.now();
     }
     // Zustände: "pan" (Schwenk zum Ziel), "in" (Zoom hinein bis 1e-16, bis das Bild zu über 90 % schwarz ist
@@ -1108,7 +1108,7 @@
             o += 4;
           }
         }
-        mandelReport(blackPixels, pw * ph);
+        mandelReport(blackPixels / (pw * ph), blackPixels > 0);
         ctx.clearRect(0, 0, w, h);
         fx.img.getContext("2d").putImageData(fx.image, 0, 0);
         ctx.imageSmoothingEnabled = true;
@@ -1213,7 +1213,7 @@
     //   u[0] = Auflösung x, y, Zeit, Flash      u[1..3] = Bänder 0–9, Bass, Gesamt
     //   u[4..6] = Themenfarben rgb + Mitten / Höhen / Puls   u[7] = Kernfarbe rgb + Glow
     //   u[8] = Hintergrund innen rgb + Drehung   u[9] = Hintergrund außen rgb + Fahrt
-    //   u[10..11] = Mandelbrot-Zoom (siehe dort), u[12..17] = Mandelbrot-Farbtabelle (8 × rgb); orbitAt(i) liest den Referenz-Orbit aus der Orbit-Textur
+    //   u[10..11] = Mandelbrot-Zoom (siehe dort), u[12..17] = Mandelbrot-Farbtabelle (8 × rgb), u[18] = deren Mittelfarbe; orbitAt(i) liest den Referenz-Orbit aus der Orbit-Textur
     const shaderLib = `
 float level(int i) { return u[1 + i / 4][i % 4]; }
 float levelAt(float x) {
@@ -1387,11 +1387,7 @@ vec4 shade(vec2 fc) {
     // eine ruhige, abgedunkelte Mittelfarbe der Palette
     float zl = sqrt(r2);
     float de = 0.5 * zl * log(zl) / (dm * length(dn)) * min(res.x, res.y);
-    vec3 avg = vec3(0.0, 0.0, 0.0);
-    for (int k = 0; k < 8; k++) {
-      avg = avg + stopAt(k) * 0.125;
-    }
-    col = mix(avg * 0.45, litCol, smoothstep(0.3, 1.5, de)) + vec3(0.012, 0.012, 0.012);
+    col = mix(u[18].xyz * 0.45, litCol, smoothstep(0.3, 1.5, de)) + vec3(0.012, 0.012, 0.012);
   }
   col = 1.0 - exp(-col * 1.3);
   return vec4(col, 1.0);
@@ -1448,7 +1444,7 @@ vec4 shade(vec2 fc) {
     }
 
     const wgslHead = `
-struct U { v: array<vec4f, 18> };
+struct U { v: array<vec4f, 19> };
 @group(0) @binding(0) var<uniform> uu: U;
 @group(0) @binding(1) var orbitTex: texture_2d<f32>;
 fn orbitAt(i: i32) -> vec2f { return textureLoad(orbitTex, vec2i(i % 1024, i / 1024), 0).xy; }
@@ -1465,7 +1461,7 @@ void main() {
 }`;
     const glslHead = `#version 300 es
 precision highp float;
-uniform vec4 u[18];
+uniform vec4 u[19];
 uniform highp sampler2D orbitTex;
 out vec4 outColor;
 float fmod(float a, float b) { return a - b * floor(a / b); }
@@ -1478,7 +1474,7 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
     const visStage = document.querySelector("#vis-stage");
     const backendLabel = document.querySelector("#backend");
     let gpuCanvas = document.querySelector("#visual-gpu");
-    const gpuUniforms = new Float32Array(72);
+    const gpuUniforms = new Float32Array(76);
     const gpuState = { rot: 0, travel: 0, pulse: 0, start: performance.now() };
     let gpu = null;
     let gpuActive = false;
@@ -1583,7 +1579,8 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
           if (readBuf) {
             statBusy = true;
             readBuf.buf.mapAsync(GPUMapMode.READ).then(() => {
-              mandelReport(countBlack(new Uint8Array(readBuf.buf.getMappedRange()), readBuf.w, readBuf.h, readBuf.bytesPerRow), readBuf.w * readBuf.h);
+              const st = blackStats(new Uint8Array(readBuf.buf.getMappedRange()), readBuf.w, readBuf.h, readBuf.bytesPerRow);
+              mandelReport(st.share, st.any);
               readBuf.buf.unmap();
               statBusy = false;
             }, () => { statBusy = false; });
@@ -1614,6 +1611,9 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
       }
       gl.bindVertexArray(gl.createVertexArray());
       let statPixels = null;
+      const statPbo = gl.createBuffer();
+      let statPboSize = 0;
+      let statRead = null;
       // Orbit-Textur (Referenz-Orbit für den Mandelbrot-Zoom) auf Einheit 0, wo alle sampler2D standardmäßig lesen
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, gl.createTexture());
@@ -1636,13 +1636,27 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
             orbitVersion = mandel.version;
           }
           draw(name);
-          if (gpuState.wantStats && !next) {
-            // Mandelbrot-Auswertung: fertiges Bild direkt nach dem Zeichnen auslesen und schwarze Pixel zählen
+          // Mandelbrot-Auswertung asynchron: readPixels in einen Pixel-Pack-Buffer (blockiert nicht),
+          // abholen erst, wenn die GPU fertig ist (Fence), in einem späteren Frame
+          if (statRead && gl.clientWaitSync(statRead.sync, 0, 0) !== gl.TIMEOUT_EXPIRED) {
+            gl.deleteSync(statRead.sync);
+            if (!statPixels || statPixels.length !== statRead.w * statRead.h * 4) statPixels = new Uint8Array(statRead.w * statRead.h * 4);
+            gl.bindBuffer(gl.PIXEL_PACK_BUFFER, statPbo);
+            gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, 0, statPixels);
+            gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+            const st = blackStats(statPixels, statRead.w, statRead.h, statRead.w * 4);
+            mandelReport(st.share, st.any);
+            statRead = null;
+          }
+          if (gpuState.wantStats && !next && !statRead) {
             const w = gpuCanvas.width;
             const h = gpuCanvas.height;
-            if (!statPixels || statPixels.length !== w * h * 4) statPixels = new Uint8Array(w * h * 4);
-            gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, statPixels);
-            mandelReport(countBlack(statPixels, w, h, w * 4), w * h);
+            gl.bindBuffer(gl.PIXEL_PACK_BUFFER, statPbo);
+            if (statPboSize !== w * h * 4) { gl.bufferData(gl.PIXEL_PACK_BUFFER, w * h * 4, gl.STREAM_READ); statPboSize = w * h * 4; }
+            gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, 0);
+            gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+            statRead = { sync: gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0), w, h };
+            gl.flush();
           }
           if (next) {
             gl.enable(gl.BLEND);
@@ -1678,16 +1692,27 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
       resizeVisual();
     }
 
-    // Zählt exakt schwarze Pixel (rgb = 0) in einem RGBA/BGRA-Bild mit Zeilenabstand bytesPerRow
-    function countBlack(data, w, h, bytesPerRow) {
+    // Schwarze Pixel (rgb = 0) in einem RGBA/BGRA-Bild mit Zeilenabstand bytesPerRow: Anteil geschätzt aus
+    // jedem 7. Pixel; ob es überhaupt eines gibt, prüft nur bei Bedarf eine Vollsuche mit frühem Abbruch
+    function blackStats(data, w, h, bytesPerRow) {
       let black = 0;
+      let seen = 0;
       for (let y = 0; y < h; y += 1) {
         const row = y * bytesPerRow;
-        for (let o = row; o < row + w * 4; o += 4) {
+        for (let x = (y * 3) % 7; x < w; x += 7) {
+          const o = row + x * 4;
+          seen += 1;
           if (data[o] === 0 && data[o + 1] === 0 && data[o + 2] === 0) black += 1;
         }
       }
-      return black;
+      if (black > 0) return { share: black / seen, any: true };
+      for (let y = 0; y < h; y += 1) {
+        const row = y * bytesPerRow;
+        for (let o = row; o < row + w * 4; o += 4) {
+          if (data[o] === 0 && data[o + 1] === 0 && data[o + 2] === 0) return { share: 0, any: true };
+        }
+      }
+      return { share: 0, any: false };
     }
 
     function hexRgb(hex) {
@@ -1729,13 +1754,15 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
       U.set([...hexRgb(t.core), t.glow / 20], 28);
       U.set([...hexRgb(t.bg[0]), gpuState.rot], 32);
       U.set([...hexRgb(t.bg[1]), gpuState.travel], 36);
-      // etwa alle 30 Frames das fertige Mandelbrot-Bild auswerten (nicht während Überblendungen)
+      // etwa alle 45 Frames das fertige Mandelbrot-Bild auswerten (nur beim Hineinzoomen, nicht beim Überblenden)
       gpuState.statFrame = (gpuState.statFrame ?? 0) + 1;
-      gpuState.wantStats = name === "Mandelbrot" && !next && gpuState.statFrame % 30 === 0;
+      gpuState.wantStats = name === "Mandelbrot" && !next && mandel.phase === "in" && gpuState.statFrame % 45 === 0;
       if (mandelOn) {
         mandelStep(s);
         U.set([mandel.offX, mandel.offY, mandel.scale, mandel.maxIt, mandel.rot, mandel.colorK, mandel.ref.length, mandel.colorOff], 40);
-        U.set(t.fractal.flatMap(hexRgb), 48);
+        const stops = t.fractal.map(hexRgb);
+        U.set(stops.flat(), 48);
+        U.set([0, 1, 2].map((i) => stops.reduce((sum, c) => sum + c[i], 0) / stops.length), 72);
       }
       gpu.render(name, next, mix);
     }
