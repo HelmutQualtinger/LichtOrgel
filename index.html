@@ -226,6 +226,7 @@
         groupInputs: "Eingänge", groupMusic: "Psychedelische Musik", srcFile: "Eigene Musikdatei …",
         musicConnecting: (n) => `Verbinde mit ${n} …`, musicPlaying: (n) => `♪ ${n}`,
         errStream: (n) => `${n} nicht abspielbar`, clickToPlay: "Zum Abspielen irgendwo klicken",
+        musicReconnecting: (n, a) => `${n}: Verbindung unterbrochen – verbinde neu (${a}) …`,
         modes: {},
         themes: {}
       },
@@ -251,6 +252,7 @@
         groupInputs: "Inputs", groupMusic: "Psychedelic music", srcFile: "Own music file …",
         musicConnecting: (n) => `Connecting to ${n} …`, musicPlaying: (n) => `♪ ${n}`,
         errStream: (n) => `${n} cannot be played`, clickToPlay: "Click anywhere to play",
+        musicReconnecting: (n, a) => `${n}: connection lost – reconnecting (${a}) …`,
         modes: { Kreis: "Circle", Welle: "Wave", Oszilloskop: "Oscilloscope", Partikel: "Particles", Wasserfall: "Waterfall",
           "Blüte": "Blossom", Sternflug: "Starflight", Galaxie: "Galaxy", Kaleidoskop: "Kaleidoscope", Blitze: "Lightning" },
         themes: { Glut: "Ember", Ozean: "Ocean" }
@@ -277,6 +279,7 @@
         groupInputs: "Ingressi", groupMusic: "Musica psichedelica", srcFile: "File musicale …",
         musicConnecting: (n) => `Connessione a ${n} …`, musicPlaying: (n) => `♪ ${n}`,
         errStream: (n) => `Impossibile riprodurre ${n}`, clickToPlay: "Clicca ovunque per ascoltare",
+        musicReconnecting: (n, a) => `${n}: connessione persa – riconnessione (${a}) …`,
         modes: { Kreis: "Cerchio", Welle: "Onda", Oszilloskop: "Oscilloscopio", Partikel: "Particelle", Wasserfall: "Cascata",
           "Blüte": "Fiore", Sternflug: "Volo stellare", Galaxie: "Galassia", Kaleidoskop: "Caleidoscopio", Terrain: "Terreno", Blitze: "Fulmini" },
         themes: { Glut: "Brace", Ozean: "Oceano" }
@@ -1756,6 +1759,12 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
       { id: "synphaera", name: "Synphaera", genre: "Space Ambient" }
     ];
     const fileSource = "file";
+    // SomaFM betreibt mehrere gleichwertige Stream-Server; Wiederverbindungen wechseln reihum
+    const streamHosts = ["ice1", "ice2", "ice3", "ice4", "ice5", "ice6"];
+    function streamUrl(station, attempt) {
+      return `https://${streamHosts[attempt % streamHosts.length]}.somafm.com/${station.id}-128-mp3`;
+    }
+    let musicWatchdog;
     const fileInput = Object.assign(document.createElement("input"), { type: "file", accept: "audio/*", hidden: true });
     document.body.append(fileInput);
     let player;
@@ -1866,6 +1875,7 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
       stream?.getTracks().forEach((track) => track.stop());
       stream = undefined;
       musicGain = undefined;
+      clearInterval(musicWatchdog);
       if (player) {
         player.pause();
         player.removeAttribute("src");
@@ -1942,15 +1952,66 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
         const current = new Audio();
         player = current;
         current.crossOrigin = "anonymous";
-        current.src = station ? `https://ice1.somafm.com/${station.id}-128-mp3` : fileUrl;
+        current.src = station ? streamUrl(station, 0) : fileUrl;
         current.loop = !station;
-        current.addEventListener("playing", () => { if (player === current) setStatus("musicPlaying", true, name); });
-        current.addEventListener("waiting", () => { if (player === current) setStatus("musicConnecting", true, name); });
+
+        // Radio: bei Abbruch (ended), Fehler oder Hänger neu verbinden, reihum über die Server
+        let attempt = 0;
+        let hostIndex = 0; // läuft immer weiter, damit jeder Neuversuch einen anderen Server nimmt
+        let reconnecting = false;
+        let retryTimer;
+        let lastTime = -1;
+        let lastProgress = performance.now();
+        const reconnectRadio = (reason) => {
+          if (player !== current) return;
+          attempt += 1;
+          console.warn(`Radio ${name}: ${reason} – Versuch ${attempt}`);
+          if (attempt > 12) {
+            stopAudio();
+            setStatus("errStream", false, name);
+            return;
+          }
+          reconnecting = true;
+          lastProgress = performance.now();
+          setStatus("musicReconnecting", true, name, attempt);
+          clearTimeout(retryTimer);
+          retryTimer = setTimeout(() => {
+            if (player !== current) return;
+            hostIndex += 1;
+            current.src = streamUrl(station, hostIndex);
+            current.play().catch(() => {}); // ein Fehler löst über "error" den nächsten Versuch aus
+          }, Math.min(500 * attempt, 5000));
+        };
+        current.addEventListener("playing", () => {
+          if (player !== current) return;
+          attempt = 0;
+          reconnecting = false;
+          setStatus("musicPlaying", true, name);
+        });
+        current.addEventListener("waiting", () => { if (player === current && !reconnecting) setStatus("musicConnecting", true, name); });
         current.addEventListener("error", () => {
           if (player !== current) return;
-          stopAudio();
-          setStatus("errStream", false, name);
+          if (station) {
+            reconnectRadio(`Fehler ${current.error?.code ?? "?"}`);
+          } else {
+            stopAudio();
+            setStatus("errStream", false, name);
+          }
         });
+        current.addEventListener("ended", () => { if (station) reconnectRadio("Stream beendet"); });
+        if (station) {
+          // Wächter: steht die Wiedergabezeit still, hängt der Stream
+          clearInterval(musicWatchdog);
+          musicWatchdog = setInterval(() => {
+            if (player !== current) return;
+            if (current.currentTime !== lastTime) {
+              lastTime = current.currentTime;
+              if (!reconnecting) lastProgress = performance.now();
+              return;
+            }
+            if (performance.now() - lastProgress > (reconnecting ? 15000 : 8000)) reconnectRadio("keine Daten");
+          }, 2000);
+        }
         // Musik geht durch den Analyser hörbar auf die Lautsprecher
         sourceNode = audioContext.createMediaElementSource(current);
         analyser = audioContext.createAnalyser();
