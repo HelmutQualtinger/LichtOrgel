@@ -1115,9 +1115,9 @@
               const lit = reliefShade(mandelZ[0], mandelZ[1], mandelDer[0], mandelDer[1]);
               const zl = Math.sqrt(mandelR2);
               const de = (0.5 * zl * Math.log(zl)) / (Math.hypot(mandelDer[0], mandelDer[1]) || 1e-300); // in Pixeln
-              const k = Math.max(0, Math.min(1, (de - 0.3) / 1.2));
+              const k = Math.max(0, Math.min(1, (de - 0.1) / 0.5));
               const fine = k * k * (3 - 2 * k);
-              rgb = heatRgb(stops, pt).map((c, i) => (c * (0.2 + 0.8 * lit) + 255 * 0.25 * lit ** 20) * fine + fx.avg[i] * 0.45 * (1 - fine));
+              rgb = heatRgb(stops, pt).map((c, i) => (c * (0.2 + 0.8 * lit) + 255 * 0.25 * lit ** 20) * fine + (fx.avg[i] + c) * 0.3 * (1 - fine));
             }
             data[o] = Math.min(255, rgb[0]);
             data[o + 1] = Math.min(255, rgb[1]);
@@ -1416,7 +1416,8 @@ vec4 shade(vec2 fc) {
     // eine ruhige, abgedunkelte Mittelfarbe der Palette
     float zl = sqrt(r2);
     float de = 0.5 * zl * log(zl) / (dm * length(dn)) * min(res.x, res.y);
-    col = mix(u[18].xyz * 0.45, litCol, smoothstep(0.3, 1.5, de)) + vec3(0.012, 0.012, 0.012);
+    vec3 fineCol = mix(u[18].xyz, heat(pt), 0.5) * 0.6;
+    col = mix(fineCol, litCol, smoothstep(0.1, 0.6, de)) + vec3(0.012, 0.012, 0.012);
   }
   col = 1.0 - exp(-col * 1.3);
   return vec4(col, 1.0);
