@@ -270,7 +270,7 @@
         errStream: (n) => `${n} cannot be played`, clickToPlay: "Click anywhere to play",
         modes: { Kreis: "Circle", Welle: "Wave", Oszilloskop: "Oscilloscope", Partikel: "Particles", Wasserfall: "Waterfall",
           "Blüte": "Blossom", Sternflug: "Starflight", Galaxie: "Galaxy", Kaleidoskop: "Kaleidoscope", Blitze: "Lightning" },
-        themes: { Glut: "Ember", Ozean: "Ocean", Prisma: "Prism", Gift: "Toxic" }
+        themes: { Glut: "Ember", Ozean: "Ocean", Prisma: "Prism", Gift: "Toxic", Klassik: "Classic" }
       },
       it: {
         source: "Sorgente", animation: "Animazione", theme: "Tema",
@@ -300,7 +300,7 @@
         errStream: (n) => `Impossibile riprodurre ${n}`, clickToPlay: "Clicca ovunque per ascoltare",
         modes: { Kreis: "Cerchio", Welle: "Onda", Oszilloskop: "Oscilloscopio", Partikel: "Particelle", Wasserfall: "Cascata",
           "Blüte": "Fiore", Sternflug: "Volo stellare", Galaxie: "Galassia", Kaleidoskop: "Caleidoscopio", Terrain: "Terreno", Blitze: "Fulmini" },
-        themes: { Glut: "Brace", Ozean: "Oceano", Prisma: "Prisma", Gift: "Tossico" }
+        themes: { Glut: "Brace", Ozean: "Oceano", Prisma: "Prisma", Gift: "Tossico", Klassik: "Classico" }
       }
     };
     const browserLang = (navigator.language || "de").slice(0, 2);
@@ -345,7 +345,18 @@
       Prisma: { bg: ["#1a1030", "#06040c"], colors: ["#ff3d3d", "#ffe23d", "#3d8bff"], core: "#ffffff", glow: 22,
         fractal: ["#3a0050", "#ff1e3c", "#ff8c1a", "#ffe81a", "#3cff5a", "#1ae0ff", "#3c5aff", "#b43cff"] },
       Gift:   { bg: ["#0d1a05", "#030702"], colors: ["#2bff00", "#c6ff00", "#fff200"], core: "#f4ffd0", glow: 24,
-        fractal: ["#020600", "#0b2a05", "#1f6b0a", "#2bff00", "#a6ff1a", "#fff200", "#fff9a8", "#ffffff"] }
+        fractal: ["#020600", "#0b2a05", "#1f6b0a", "#2bff00", "#a6ff1a", "#fff200", "#fff9a8", "#ffffff"] },
+      // Übliche Fraktal-Farbtabellen: Ultra-Fractal-Standard und die matplotlib-Tabellen viridis, inferno, twilight, turbo
+      Klassik: { bg: ["#06123a", "#010412"], colors: ["#206bcb", "#edffff", "#ffaa00"], core: "#ffffff", glow: 20,
+        fractal: ["#000764", "#1d60c0", "#83b3e4", "#eefcf5", "#f9c551", "#aa7200", "#000200", "#000764"] },
+      Viridis: { bg: ["#1f0f2e", "#08040c"], colors: ["#365c8d", "#1fa187", "#fde725"], core: "#fdffd0", glow: 18,
+        fractal: ["#440154", "#46327e", "#365c8d", "#277f8e", "#1fa187", "#4ac16d", "#a0da39", "#fde725"] },
+      Inferno: { bg: ["#1a0626", "#050008"], colors: ["#9f2a63", "#f57d15", "#fcffa4"], core: "#fffbe0", glow: 24,
+        fractal: ["#000004", "#280b53", "#65156e", "#9f2a63", "#d44842", "#f57d15", "#fac228", "#fcffa4"] },
+      Twilight: { bg: ["#24102e", "#08040c"], colors: ["#5f61b4", "#a54350", "#e2d9e2"], core: "#ffffff", glow: 18,
+        fractal: ["#e2d9e2", "#89adc5", "#5f61b4", "#491564", "#501444", "#a54350", "#ca997c", "#e2d9e2"] },
+      Turbo: { bg: ["#140a24", "#05030a"], colors: ["#4776ee", "#61fc6c", "#fe9b2d"], core: "#ffffff", glow: 22,
+        fractal: ["#30123b", "#4776ee", "#1bd0d5", "#61fc6c", "#d2e935", "#fe9b2d", "#da3907", "#7a0403"] }
     };
     const visCanvas = document.querySelector("#visual");
     const themeSwitch = document.querySelector("#theme-switch");

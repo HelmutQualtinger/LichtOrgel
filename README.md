@@ -83,7 +83,7 @@ Trennt sich ein Mikrofon (Gerätewechsel, Bluetooth, Ruhezustand), verbindet die
 | Terrain | 3D-Gitterlandschaft aus dem Spektrumsverlauf mit Sonne am Horizont |
 | Blitze | Blitzeinschläge bei Bass-Schlägen und Spitzen in den Höhen |
 
-Farbthemen: **Neon**, **Glut**, **Ozean**, **Aurora**, **Mono**, **Prisma**, **Gift**. Jedes Thema hat zusätzlich eine eigene achtstufige Farbtabelle für den Mandelbrot-Effekt.
+Farbthemen: **Neon**, **Glut**, **Ozean**, **Aurora**, **Mono**, **Prisma**, **Gift** sowie die in der Fraktal- und Datengrafik üblichen Farbtabellen **Klassik** (Ultra-Fractal-Standard), **Viridis**, **Inferno**, **Twilight** und **Turbo** (aus matplotlib). Jedes Thema hat eine eigene achtstufige Farbtabelle für den Mandelbrot-Effekt.
 
 Bei jedem Bass-Schlag hellt sich das Bild kurz auf.
 
