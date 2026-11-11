@@ -770,15 +770,29 @@
     const mandel = { phase: "pan", pan: 0, panSecs: 5, panVec: [0, 0], depth: 0, vel: 0, rot: 0, hue: 0, kick: 0, pitch: 0.3, vol: 0, last: 0, spot: -1,
       ref: null, version: 0, offX: 0, offY: 0, scale: 2.6, maxIt: 250, scan: { row: 0, escaped: [] }, black: 0, flat: 0, end: 30, holdUntil: 0,
       lo: 0, hi: 250, loTarget: 0, hiTarget: 250, colorK: 0, colorOff: 0 };
+    // Musikbewegung für Mandelbrot und Julia: Drehung, Farbschub auf Bass-Schläge, Farblauf, Tonhöhe, Lautstärke
+    function fractalMusic(st, s, dt) {
+      st.rot += dt * (0.01 + s.overall * 0.15 + st.kick * 0.25); // Drehung zieht mit Lautstärke und Bass-Schlägen an
+      // Farbverschiebung in der Farbtabelle: läuft mit der Lautstärke, Bass-Schläge geben einen weich abklingenden Schub
+      st.kick = s.beat ? Math.max(st.kick * Math.exp(-dt * 2.5), 0.22 + s.bass * 0.35) : st.kick * Math.exp(-dt * 2.5);
+      st.hue = (st.hue + dt * (0.012 + s.overall * 0.12 + st.kick)) % 1;
+      // Tonhöhe: spektraler Schwerpunkt der Bänder (0 = Bass … 1 = Höhen), sofort, ohne Glättung
+      let weight = 0;
+      let moment = 0;
+      for (let i = 0; i < bandCount; i += 1) {
+        const v = visLevels[i] * visLevels[i];
+        weight += v;
+        moment += v * i;
+      }
+      if (weight > 0.001) st.pitch = moment / weight / (bandCount - 1);
+      st.vol = s.overall; // Lautstärke, sofort, ohne Glättung
+    }
     function mandelStep(s) {
       const now = performance.now();
       if (now === mandel.last) return;
       const dt = mandel.last ? Math.min(0.1, (now - mandel.last) / 1000) : 0;
       mandel.last = now;
-      mandel.rot += dt * (0.01 + s.overall * 0.15 + mandel.kick * 0.25); // Drehung zieht mit Lautstärke und Bass-Schlägen an
-      // Farbverschiebung in der Farbtabelle: läuft mit der Lautstärke, Bass-Schläge geben einen weich abklingenden Schub
-      mandel.kick = s.beat ? Math.max(mandel.kick * Math.exp(-dt * 2.5), 0.22 + s.bass * 0.35) : mandel.kick * Math.exp(-dt * 2.5);
-      mandel.hue = (mandel.hue + dt * (0.012 + s.overall * 0.12 + mandel.kick)) % 1;
+      fractalMusic(mandel, s, dt);
       if (mandel.spot < 0) {
         // Startpunkt bei jedem Seitenaufruf anders: Zufallszahl aus der Uhrzeit (Millisekunden)
         mandel.spot = Date.now() % mandelSpots.length;
@@ -843,18 +857,145 @@
       mandel.lo += (mandel.loTarget - mandel.lo) * follow;
       mandel.hi += (mandel.hiTarget - mandel.hi) * follow;
       mandel.colorK = heatCycles / Math.max(24, mandel.hi - mandel.lo);
-      // Tonhöhe: spektraler Schwerpunkt der Bänder (0 = Bass … 1 = Höhen), geglättet; verschiebt die Farbtabelle
-      let weight = 0;
-      let moment = 0;
-      for (let i = 0; i < bandCount; i += 1) {
-        const v = visLevels[i] * visLevels[i];
-        weight += v;
-        moment += v * i;
-      }
-      if (weight > 0.001) mandel.pitch = moment / weight / (bandCount - 1); // sofort, ohne Glättung
-      // Lautstärke verschiebt die Farbtabelle direkt (laut = bis zu 0,9 Durchläufe weiter)
-      mandel.vol = s.overall; // sofort, ohne Glättung
+      // Tonhöhe und Lautstärke verschieben die Farbtabelle direkt (laut = bis zu 0,9 Durchläufe weiter)
       mandel.colorOff = mandel.hue + mandel.pitch * 1.5 + mandel.vol * 0.9 - mandel.lo * mandel.colorK;
+    }
+
+    // ---- Julia-Menge: Gegenstück zum Mandelbrot-Modus (gleiche Farbtabelle, Relief und Musikreaktion) ----
+    // c wandert am Rand der Hauptkardioide entlang (c = e^iθ/2 − e^2iθ/4): dort liegen die strukturreichsten
+    // Julia-Mengen (Spiralen, Seepferdchen, Drachen, Blumenkohl). c pendelt langsam um den Rand: knapp innerhalb
+    // ist die Menge zusammenhängend mit schwarzem Inneren, knapp außerhalb zerfällt sie in Spiralen aus Staub;
+    // Bass-Schläge schieben c kurz nach außen.
+    // Zoom: Ziel ist ein Randpunkt, gefunden per Rückwärtsiteration z → ±√(z − c) (konvergiert auf die Julia-Menge).
+    // Weil c wandert, wird das Ziel jedes Frame neu berechnet; je Stufe nimmt es die Wurzel, die der des vorigen
+    // Frames am nächsten liegt, so bleibt es stetig am Rand. Zyklus: hinein bis juliaDepth, 5 s verweilen,
+    // heraus, neues Zufallsziel. float32 ohne Perturbation: ab ca. 1e-4 würde das Bild pixelig, daher 3,5.
+    const juliaDepth = 3.5;
+    const juliaLevels = 40;
+    const julia = { last: 0, theta: 1.9, rot: 0, hue: 0, kick: 0, pitch: 0.3, vol: 0, push: 0, cx: 0, cy: 0, scale: 2.3, maxIt: 400, colorK: 0.1, colorOff: 0,
+      phase: "in", depth: 0, vel: 0, holdUntil: 0, path: null, tx: 0, ty: 0, centerX: 0, centerY: 0 };
+    // Randpunkt der aktuellen Julia-Menge, stetig nachgeführt (path = Rückwärtsorbit des vorigen Frames).
+    // Neues Ziel: 16 zufällige Randpunkte, genommen wird der mit der meisten Struktur in der Endansicht
+    // (bewertet mit dem c, das in der Endtiefe gilt: dort liegt es viel näher am Kardioidenrand).
+    function juliaTarget() {
+      if (!julia.path) {
+        const [cx, cy] = [julia.cx, julia.cy];
+        const rEnd = 1 - 0.01 * 10 ** (-juliaDepth * 0.8);
+        julia.cx = (Math.cos(julia.theta) / 2 - Math.cos(2 * julia.theta) / 4) * rEnd;
+        julia.cy = (Math.sin(julia.theta) / 2 - Math.sin(2 * julia.theta) / 4) * rEnd;
+        let best = null;
+        let bestScore = -1;
+        for (let k = 0; k < 16; k += 1) {
+          julia.path = null;
+          juliaBackward(true);
+          const score = juliaStructure(julia.tx, julia.ty);
+          if (score > bestScore) {
+            bestScore = score;
+            best = julia.path.slice();
+          }
+        }
+        julia.path = best;
+        julia.cx = cx;
+        julia.cy = cy;
+      }
+      juliaBackward(false);
+    }
+    // Struktur um (x, y) in der Endansicht: 9 × 9 Punkte; viel Mischung aus Innen/Außen und viel Streuung der
+    // Fluchtzeiten = viel zu sehen (ein glatter Verlauf oder reines Schwarz zählt wenig)
+    function juliaStructure(x0, y0) {
+      const span = 2.3 * 10 ** -juliaDepth;
+      const its = [];
+      let inner = 0;
+      for (let j = 0; j < 9; j += 1) {
+        for (let i = 0; i < 9; i += 1) {
+          let x = x0 + (i / 8 - 0.5) * span * 1.5;
+          let y = y0 + (j / 8 - 0.5) * span;
+          let n = 0;
+          while (n < 600 && x * x + y * y < 256) {
+            const x2 = x * x - y * y + julia.cx;
+            y = 2 * x * y + julia.cy;
+            x = x2;
+            n += 1;
+          }
+          if (n >= 600) inner += 1;
+          else its.push(Math.log(n + 1));
+        }
+      }
+      if (its.length < 2) return 0;
+      const mean = its.reduce((a, b) => a + b, 0) / its.length;
+      const sd = Math.sqrt(its.reduce((a, b) => a + (b - mean) ** 2, 0) / its.length);
+      const f = inner / 81;
+      return sd * (0.3 + f * (1 - f) * 4);
+    }
+    function juliaBackward(fresh) {
+      if (fresh) julia.path = new Float64Array(juliaLevels * 2);
+      let zx = 2;
+      let zy = 0;
+      for (let k = 0; k < juliaLevels; k += 1) {
+        // √(z − c) über Polarform
+        const wx = zx - julia.cx;
+        const wy = zy - julia.cy;
+        const r = Math.sqrt(Math.hypot(wx, wy));
+        const a = Math.atan2(wy, wx) / 2;
+        let rx = r * Math.cos(a);
+        let ry = r * Math.sin(a);
+        const px = julia.path[k * 2];
+        const py = julia.path[k * 2 + 1];
+        // neues Ziel: zufälliger Zweig; sonst der Zweig, der dem vorigen Frame am nächsten liegt
+        const flip = fresh ? Math.random() < 0.5 : (rx + px) ** 2 + (ry + py) ** 2 < (rx - px) ** 2 + (ry - py) ** 2;
+        if (flip) { rx = -rx; ry = -ry; }
+        julia.path[k * 2] = rx;
+        julia.path[k * 2 + 1] = ry;
+        zx = rx;
+        zy = ry;
+      }
+      julia.tx = zx;
+      julia.ty = zy;
+    }
+    function juliaStep(s) {
+      const now = performance.now();
+      if (now === julia.last) return;
+      const dt = julia.last ? Math.min(0.1, (now - julia.last) / 1000) : 0;
+      julia.last = now;
+      fractalMusic(julia, s, dt);
+      // ein Umlauf um die Kardioide in gut 4 Minuten; beim Zoomen langsamer, damit die gewählte Struktur bleibt
+      julia.theta += dt * (0.02 + s.overall * 0.05) * (0.15 + 0.85 * Math.max(0, 1 - julia.depth / 1.2));
+      julia.push = s.beat ? Math.max(julia.push, 0.025 + s.bass * 0.03) : julia.push * Math.exp(-dt * 3);
+      // radialer Abstand: atmet langsam um den Rand (innen filigran zusammenhängend, außen zerfallende Spiralen),
+      // Bass-Schläge drücken nach außen. Beim Hineinzoomen bleibt c innen: außerhalb ist die Menge Staub, und das
+      // Zoomziel (ein Punkt dieses Staubs) wäre unsichtbar fein. Und c rückt mit der Tiefe immer näher an den Rand:
+      // die Spiralen einer Julia-Menge sind etwa so fein wie der Abstand von c zum Rand; weiter innen bliebe nur
+      // ein in jeder Tiefe gleich aussehender, welliger Rand.
+      const out = Math.max(0, 1 - julia.depth / 1.2);
+      const rIn = 1 - 0.01 * 10 ** (-julia.depth * 0.8);
+      const r = rIn + (0.995 + 0.015 * Math.sin(now / 1000 * 0.11) - rIn) * out + julia.push * (0.15 + 0.85 * out) * 10 ** (-julia.depth * 0.8);
+      const th = julia.theta;
+      julia.cx = (Math.cos(th) / 2 - Math.cos(2 * th) / 4) * r;
+      julia.cy = (Math.sin(th) / 2 - Math.sin(2 * th) / 4) * r;
+      // Zoomzyklus wie bei Mandelbrot: Tempo in Zehnerpotenzen pro Sekunde, vor dem Ziel abbremsen
+      juliaTarget();
+      const want = julia.phase === "in" ? 0.12 * Math.min(1, (juliaDepth - julia.depth) / 1 + 0.1)
+        : julia.phase === "out" ? -0.25 * Math.min(1, julia.depth / 0.8 + 0.08) : 0;
+      julia.vel += (want - julia.vel) * Math.min(1, dt * 0.8);
+      if (julia.phase === "hold") julia.vel = 0;
+      julia.depth = Math.max(0, Math.min(juliaDepth, julia.depth + julia.vel * dt));
+      if (julia.phase === "in" && julia.depth >= juliaDepth - 0.02) {
+        julia.phase = "hold";
+        julia.holdUntil = now + 5000;
+      } else if (julia.phase === "hold" && now >= julia.holdUntil) {
+        julia.phase = "out";
+      } else if (julia.phase === "out" && julia.depth <= 0.001) {
+        julia.phase = "in";
+        julia.path = null; // nächstes Mal ein neuer, zufälliger Randpunkt
+      }
+      // Bildmitte gleitet vom Ursprung (ganze Menge) zum Ziel; ab Tiefe 1,2 exakt auf dem Ziel
+      const e = Math.min(1, julia.depth / 1.2);
+      const w = e * e * (3 - 2 * e);
+      julia.centerX = julia.tx * w;
+      julia.centerY = julia.ty * w;
+      julia.scale = 2.3 * 10 ** -julia.depth * (1 - s.bass * 0.1);
+      julia.maxIt = Math.round(400 + julia.depth * 120);
+      julia.colorOff = julia.hue + julia.pitch * 1.5 + julia.vol * 0.9;
     }
 
     let fx = {};
@@ -1338,6 +1479,70 @@
         ctx.drawImage(fx.img, 0, 0, w, h);
       },
 
+      // Julia-Menge (Canvas-2D-Variante mit geringerer Auflösung, Färbung wie Mandelbrot)
+      Julia(ctx, w, h, t, s) {
+        juliaStep(s);
+        const pw = 120;
+        const ph = Math.max(1, Math.round((pw * h) / w));
+        if (!fx.img || fx.img.height !== ph) {
+          fx.img = Object.assign(document.createElement("canvas"), { width: pw, height: ph });
+          fx.image = fx.img.getContext("2d").createImageData(pw, ph);
+        }
+        if (fx.stopsKey !== t.fractal.join()) {
+          fx.stops = stopsRgb(t.fractal);
+          fx.avg = [0, 1, 2].map((i) => fx.stops.reduce((sum, c) => sum + c[i], 0) / fx.stops.length);
+          fx.stopsKey = t.fractal.join();
+        }
+        const maxIt = Math.min(julia.maxIt, 300);
+        const sc = julia.scale / Math.min(pw, ph);
+        const ca = Math.cos(julia.rot) * sc;
+        const sa = Math.sin(julia.rot) * sc;
+        const { cx, cy } = julia;
+        const data = fx.image.data;
+        let o = 0;
+        for (let y = 0; y < ph; y += 1) {
+          for (let x = 0; x < pw; x += 1) {
+            const px = x - pw / 2;
+            const py = y - ph / 2;
+            let zx = julia.centerX + px * ca - py * sa;
+            let zy = julia.centerY + px * sa + py * ca;
+            let ex = ca;
+            let ey = sa;
+            let n = 0;
+            let r2 = zx * zx + zy * zy;
+            while (n < maxIt && r2 <= 256) {
+              const ex2 = 2 * (zx * ex - zy * ey);
+              ey = 2 * (zx * ey + zy * ex);
+              ex = ex2;
+              const zx2 = zx * zx - zy * zy + cx;
+              zy = 2 * zx * zy + cy;
+              zx = zx2;
+              r2 = zx * zx + zy * zy;
+              n += 1;
+            }
+            let rgb = [0, 0, 0];
+            if (r2 > 256) {
+              const mu = n + 1 - Math.log2(Math.max(1, Math.log(r2) / 2));
+              const lit = reliefShade(zx, zy, ex, ey);
+              const zl = Math.sqrt(r2);
+              const de = (0.5 * zl * Math.log(zl)) / (Math.hypot(ex, ey) || 1e-300); // in Pixeln
+              const k = Math.max(0, Math.min(1, (de - 0.1) / 0.5));
+              const fine = k * k * (3 - 2 * k);
+              rgb = heatRgb(fx.stops, mu * julia.colorK + julia.colorOff).map((c, i) => (c * (0.2 + 0.8 * lit) + 255 * 0.25 * lit ** 20) * fine + (fx.avg[i] + c) * 0.3 * (1 - fine));
+            }
+            data[o] = Math.min(255, rgb[0]);
+            data[o + 1] = Math.min(255, rgb[1]);
+            data[o + 2] = Math.min(255, rgb[2]);
+            data[o + 3] = r2 > 256 ? 255 : 0;
+            o += 4;
+          }
+        }
+        ctx.clearRect(0, 0, w, h);
+        fx.img.getContext("2d").putImageData(fx.image, 0, 0);
+        ctx.imageSmoothingEnabled = true;
+        ctx.drawImage(fx.img, 0, 0, w, h);
+      },
+
       // Retro-Landschaft: Spektrum-Verlauf als 3D-Gitter mit Sonne am Horizont
       Terrain(ctx, w, h, t, s) {
         ctx.clearRect(0, 0, w, h);
@@ -1437,6 +1642,7 @@
     //   u[4..6] = Themenfarben rgb + Mitten / Höhen / Puls   u[7] = Kernfarbe rgb + Glow
     //   u[8] = Hintergrund innen rgb + Drehung   u[9] = Hintergrund außen rgb + Fahrt
     //   u[10..11] = Mandelbrot-Zoom (siehe dort), u[12..17] = Mandelbrot-Farbtabelle (8 × rgb), u[18] = deren Mittelfarbe, u[19] = Referenzpunkt (für den Kardioiden-Test); orbitAt(i) liest den Referenz-Orbit aus der Orbit-Textur
+    //   u[20] = Julia c.xy, Maßstab, Drehung   u[21] = Julia max. Iterationen, Farbschritt, Farbversatz   u[22] = Julia Bildmitte xy
     const shaderLib = `
 float level(int i) { return u[1 + i / 4][i % 4]; }
 float levelAt(float x) {
@@ -1654,6 +1860,60 @@ vec4 shade(vec2 fc) {
   col = 1.0 - exp(-col * 1.3);
   return vec4(col, 1.0);
 }`,
+      // Julia-Menge z → z² + c, Färbung wie Mandelbrot: Farbtabelle des Themas, Relief über dz/dp,
+      // Distanzschätzung gegen Farbrauschen; dz/dp wird bei Überlauf herunterskaliert (dann ist der Rand sowieso subpixelfein)
+      Julia: `
+float jf(int k) { return u[12 + k / 4][k % 4]; }
+vec3 jStop(int i) { return vec3(jf(i * 3), jf(i * 3 + 1), jf(i * 3 + 2)); }
+vec3 jHeat(float t) {
+  float x = fract(t) * 8.0;
+  vec3 c = jStop(0);
+  for (int i = 1; i < 8; i++) {
+    c = mix(c, jStop(i), clamp(x - float(i - 1), 0.0, 1.0));
+  }
+  return mix(c, jStop(0), clamp(x - 7.0, 0.0, 1.0));
+}
+vec4 shade(vec2 fc) {
+  vec2 res = u[0].xy;
+  vec2 p = (fc - res * 0.5) / min(res.x, res.y);
+  vec2 c = u[20].xy;
+  float ca = cos(u[20].w);
+  float sa = sin(u[20].w);
+  float maxIt = u[21].x;
+  vec2 z = u[22].xy + vec2(p.x * ca - p.y * sa, p.x * sa + p.y * ca) * u[20].z;
+  vec2 der = vec2(ca, sa) * u[20].z;
+  float big = 0.0;
+  float n = 0.0;
+  float r2 = dot(z, z);
+  for (int i = 0; i < 1024; i++) {
+    if (n >= maxIt || r2 > 256.0) { break; }
+    der = vec2(2.0 * (z.x * der.x - z.y * der.y), 2.0 * (z.x * der.y + z.y * der.x));
+    if (max(abs(der.x), abs(der.y)) > 1e18) {
+      der = der * 1e-18;
+      big = 1.0;
+    }
+    z = vec2(z.x * z.x - z.y * z.y, 2.0 * z.x * z.y) + c;
+    r2 = dot(z, z);
+    n = n + 1.0;
+  }
+  vec3 col = vec3(0.0, 0.0, 0.0);
+  if (r2 > 256.0) {
+    float mu = n + 1.0 - log2(max(log(r2) * 0.5, 1.0));
+    float pt = mu * u[21].y + u[21].z;
+    float dm = max(max(abs(der.x), abs(der.y)), 1e-30);
+    vec2 dn = der / dm;
+    vec2 nrm = vec2(z.x * dn.x + z.y * dn.y, z.y * dn.x - z.x * dn.y);
+    nrm = nrm / max(length(nrm), 1e-20);
+    float lit = max((dot(nrm, vec2(-0.7071, -0.7071)) + 1.5) / 2.5, 0.0);
+    vec3 litCol = jHeat(pt) * (0.2 + 0.8 * lit) + vec3(0.25, 0.25, 0.25) * pow(lit, 20.0);
+    float zl = sqrt(r2);
+    float de = 0.5 * zl * log(zl) / (dm * length(dn)) * min(res.x, res.y) * (1.0 - big);
+    vec3 fineCol = mix(u[18].xyz, jHeat(pt), 0.5) * 0.6;
+    col = mix(fineCol, litCol, smoothstep(0.1, 0.6, de)) + vec3(0.012, 0.012, 0.012);
+  }
+  col = 1.0 - exp(-col * 1.3);
+  return vec4(col, 1.0);
+}`,
       Plasma: `
 vec4 shade(vec2 fc) {
   vec2 res = u[0].xy;
@@ -1707,7 +1967,7 @@ vec4 shade(vec2 fc) {
     }
 
     const wgslHead = `
-struct U { v: array<vec4f, 20> };
+struct U { v: array<vec4f, 23> };
 @group(0) @binding(0) var<uniform> uu: U;
 @group(0) @binding(1) var orbitTex: texture_2d<f32>;
 fn orbitAt(i: i32) -> vec2f { return textureLoad(orbitTex, vec2i(i & 1023, i >> 10u), 0).xy; }
@@ -1724,7 +1984,7 @@ void main() {
 }`;
     const glslHead = `#version 300 es
 precision highp float;
-uniform vec4 u[20];
+uniform vec4 u[23];
 uniform highp sampler2D orbitTex;
 out vec4 outColor;
 float fmod(float a, float b) { return a - b * floor(a / b); }
@@ -1737,7 +1997,7 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
     const visStage = document.querySelector("#vis-stage");
     const backendLabel = document.querySelector("#backend");
     let gpuCanvas = document.querySelector("#visual-gpu");
-    const gpuUniforms = new Float32Array(80);
+    const gpuUniforms = new Float32Array(92);
     const gpuState = { rot: 0, travel: 0, pulse: 0, start: performance.now() };
     let gpu = null;
     let gpuActive = false;
@@ -1985,17 +2245,19 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
       // Mandelbrot ist teuer (bis ~700 Iterationen pro Pixel): Auflösung passt sich der Bildrate an
       // (im Mittel unter ~40 fps weniger Pixel, bis 0,6; bei Luft wieder mehr; Stufen von 0,05 gegen ständiges Umskalieren)
       const mandelOn = name === "Mandelbrot" || next === "Mandelbrot";
+      const juliaOn = name === "Julia" || next === "Julia";
+      const fractalOn = mandelOn || juliaOn;
       const now = performance.now();
       const frameMs = now - (gpuState.lastFrame ?? now);
       gpuState.lastFrame = now;
-      if (mandelOn && frameMs > 0 && frameMs < 200) {
+      if (fractalOn && frameMs > 0 && frameMs < 200) {
         // geglättete Frame-Zeit, damit einzelne Ruckler die Auflösung nicht absenken
         gpuState.frameAvg = (gpuState.frameAvg ?? frameMs) * 0.95 + frameMs * 0.05;
         const cap = Math.min(gpuRatio, isMobile ? 0.75 : 1);
         if (gpuState.frameAvg > 25) gpuState.mandelRes = Math.max(0.6, (gpuState.mandelRes ?? cap) - 0.005);
         else if (gpuState.frameAvg < 18.5) gpuState.mandelRes = Math.min(cap, (gpuState.mandelRes ?? cap) + 0.005);
       }
-      const r = mandelOn ? Math.round(Math.min(gpuState.mandelRes ?? 1, gpuRatio) * 20) / 20 : gpuRatio;
+      const r = fractalOn ? Math.round(Math.min(gpuState.mandelRes ?? 1, gpuRatio) * 20) / 20 : gpuRatio;
       const gw = Math.round(visCanvas.clientWidth * r);
       const gh = Math.round(visCanvas.clientHeight * r);
       if (gpuCanvas.width !== gw || gpuCanvas.height !== gh) {
@@ -2024,7 +2286,11 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
         U.set([mandel.offX, mandel.offY, mandel.scale, mandel.maxIt, mandel.rot, mandel.colorK, mandel.ref.length, mandel.colorOff], 40);
         U.set([mandel.ref.center[0], mandel.ref.center[1], 0, 0], 76);
       }
-      // Farbtabelle des Themas (u[12..17]) und ihr Mittel (u[18]): Mandelbrot und Kaleidoskop
+      if (juliaOn) {
+        juliaStep(s);
+        U.set([julia.cx, julia.cy, julia.scale, julia.rot, julia.maxIt, julia.colorK, julia.colorOff, 0, julia.centerX, julia.centerY, 0, 0], 80);
+      }
+      // Farbtabelle des Themas (u[12..17]) und ihr Mittel (u[18]): Mandelbrot, Julia und Kaleidoskop
       const stops = t.fractal.map(hexRgb);
       U.set(stops.flat(), 48);
       U.set([0, 1, 2].map((i) => stops.reduce((sum, c) => sum + c[i], 0) / stops.length), 72);
