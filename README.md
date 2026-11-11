@@ -2,7 +2,7 @@
 
 ![LichtOrgel – psychedelisches Regenbogen-Mandala mit funkelnden Diamanten und dem Schriftzug „Lucy in the Sky with Diamonds“](og-image.jpg)
 
-Eine Lichtorgel im Browser: Audio von im Browser erzeugten Synthesizer-Loops, Mikrofon, Computer oder einer eigenen Musikdatei wird in zehn Frequenzbänder zerlegt und in Echtzeit als Animation dargestellt. Oberfläche und Stimme gibt es auf Deutsch, Englisch und Italienisch. Die Anwendung ist eine einzelne Datei (`index.html`) ohne Abhängigkeiten und ohne Build-Schritt; dazu kommen Manifest, Service Worker und Icons für die Installation als App.
+Eine Lichtorgel im Browser: Audio von im Browser erzeugten Synthesizer-Loops, Mikrofon, Computer, Internetradio oder einer eigenen Musikdatei wird in zehn Frequenzbänder zerlegt und in Echtzeit als Animation dargestellt. Oberfläche und Stimme gibt es auf Deutsch, Englisch und Italienisch. Die Anwendung ist eine einzelne Datei (`index.html`) ohne Abhängigkeiten und ohne Build-Schritt; dazu kommen Manifest, Service Worker und Icons für die Installation als App.
 
 **Live:** https://helmutqualtinger.github.io/LichtOrgel/
 
@@ -31,10 +31,10 @@ Alle Einstellungen befinden sich in der Kopfleiste und werden im Browser gespeic
 
 | Element | Funktion |
 |---|---|
-| **Quelle** | Synthesizer-Loop, Mikrofon, Eingabegerät, Computer-Ton oder eigene Musikdatei |
+| **Quelle** | Synthesizer-Loop, Mikrofon, Eingabegerät, Computer-Ton, psychedelischer Internetradio-Sender (SomaFM), Radiosender (Ö3, ORF Radio Wien, ORF Radio Vorarlberg, Bayern 3, SWR3, Rai Radio 1/2, RSI Rete Uno/Due) oder eigene Musikdatei |
 | **Start / Stopp** | Audio ein- und ausschalten |
 | **Auto** | Geht automatisch der Reihe nach durch Effekte und Farbthemen |
-| **Stimme** | Im Auto-Modus spricht eine weibliche Stimme bei jedem Farbwechsel einen Spruch |
+| **Stimme** | Eine weibliche Stimme spricht einen Spruch: im Auto-Modus bei jedem Farbwechsel, sonst alle 30 Sekunden |
 | **Flaggenmenü** | Sprache von Oberfläche und Stimme: 🇩🇪 Deutsch, 🇬🇧 English, 🇮🇹 Italiano |
 | **Animation** | Effekt wählen (Wechsel mit Überblendung) |
 | **Thema** | Farbthema wählen (fließender Übergang) |
@@ -91,7 +91,7 @@ Bei jedem Bass-Schlag hellt sich das Bild kurz auf.
 
 Im Auto-Modus wechselt der Effekt alle 20 Sekunden zum nächsten in Menüreihenfolge, jeweils auf dem nächsten Bass-Schlag. Für 2,5 Sekunden laufen alter und neuer Effekt gleichzeitig und werden überblendet. Das Farbthema wechselt alle 12 Sekunden mit einer Überblendung von 4 Sekunden. Der Auto-Modus läuft nur bei aktivem Audio.
 
-Mit eingeschalteter **Stimme** spricht eine weibliche Stimme bei jedem Farbwechsel langsam einen von 31 psychedelischen Sprüchen in der gewählten Sprache, eingeblendet als Untertitel. Die Reihenfolge ist zufällig; jeder Spruch kommt einmal, bevor neu gemischt wird. Verwendet wird die Sprachausgabe des Browsers; auf dem Mac bevorzugt „Petra (Premium)“ (Deutsch), „Samantha“ (Englisch) und „Alice“ (Italienisch).
+Mit eingeschalteter **Stimme** spricht eine weibliche Stimme bei jedem Farbwechsel (ohne Auto-Modus alle 30 Sekunden) langsam einen von 31 psychedelischen Sprüchen in der gewählten Sprache, eingeblendet als Untertitel. Die Reihenfolge ist zufällig; jeder Spruch kommt einmal, bevor neu gemischt wird. Verwendet wird die Sprachausgabe des Browsers; auf dem Mac bevorzugt „Petra (Premium)“ (Deutsch), „Samantha“ (Englisch) und „Alice“ (Italienisch).
 
 ## Grafik-Backends
 
