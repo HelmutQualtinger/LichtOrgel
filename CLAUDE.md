@@ -71,7 +71,7 @@ Mandelbrot deep zoom (state machine in `mandelStep()`: `pan` (offset `panVec` ea
 
 ### PWA and mobile
 
-- `sw.js` caches the app shell with stale-while-revalidate (cache name `lichtorgel-v1`); it is registered only over `https:` so local development is never cached. Add new top-level files to `ASSETS` in `sw.js`; bump the cache name only when files are removed or renamed.
+- `sw.js`: page navigations are network-first (`cache: "no-cache"`, bypassing GitHub Pages' 10-minute HTTP cache; the cache is only the offline fallback), so a deploy shows up on the next reload; other assets (icons, manifest) use stale-while-revalidate (cache name `lichtorgel-v1`). With the old pure stale-while-revalidate, deploys appeared only after several reloads. it is registered only over `https:` so local development is never cached. Add new top-level files to `ASSETS` in `sw.js`; bump the cache name only when files are removed or renamed.
 - No Xcode/Android SDK on this machine; native store builds (e.g. Capacitor) would need them plus developer accounts.
 - Phones: `isMobile` (`pointer: coarse`) caps canvas resolution (2D 1.5×, GPU 1.25×) and shortens the synth reverb (1.8 s) to keep the audio thread from underrunning; music contexts use `latencyHint: "playback"` (mic keeps `"interactive"`); the synth scheduler re-syncs instead of cramming late notes (prevents clicks). Safe-area insets pad `main` (`viewport-fit=cover`).
 
