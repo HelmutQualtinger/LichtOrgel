@@ -116,15 +116,30 @@
       cursor: pointer;
     }
     .source-select { max-width: 200px; text-overflow: ellipsis; }
+    /* Link zum Quellcode: GitHub-Logo dunkel auf hellem Feld, gut sichtbar am rechten Rand (nur Logo, damit die Leiste einzeilig bleibt) */
+    .gh-link {
+      display: inline-flex;
+      flex: 0 0 auto;
+      align-items: center;
+      justify-content: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 9px;
+      background: #f0f6fc;
+      color: #0d1117;
+    }
+    .gh-link:hover { background: #fff; }
+    .gh-link:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
     .lang-select { padding-right: 26px; background-position: right 8px center; }
     @media (max-width: 1450px) { .picker > span:first-child { display: none; } }
-    @media (max-width: 1200px) { .bar { gap: 8px 10px; } button.toggle { padding: 0 11px; } .bar h1 { display: none; } }
+    @media (max-width: 1200px) { .bar { gap: 8px 10px; } button.toggle { padding: 0 11px; } .bar h1 { display: none; } .pickers { gap: 6px; } }
     @media (max-width: 1450px) {
       .source-select { max-width: 160px; }
       #status { max-width: 150px; }
       /* nur die Flagge zeigen; die Namen stehen im aufgeklappten Menü */
       .lang-select { width: 56px; text-overflow: clip; }
     }
+    @media (max-width: 1200px) { #status { max-width: 110px; } } /* Platz für den GitHub-Link */
     .swatch { width: 18px; height: 18px; border-radius: 5px; flex: 0 0 auto; }
     /* Backend und Bildrate unten rechts über dem Bild, damit sich die Kopfleiste nicht bewegt */
     .backend {
@@ -233,6 +248,9 @@
         <select id="lang" class="lang-select" data-i18n-aria="ariaLang" aria-label="Sprache"></select>
         <label class="picker"><span data-i18n="animation">Animation</span><select id="mode-switch" data-i18n-aria="animation" aria-label="Animation"></select></label>
         <label class="picker"><span data-i18n="theme">Thema</span><span class="swatch" id="theme-swatch" aria-hidden="true"></span><select id="theme-switch" data-i18n-aria="ariaTheme" aria-label="Farbthema"></select></label>
+        <a class="gh-link" href="https://github.com/HelmutQualtinger/LichtOrgel" target="_blank" rel="noopener" data-i18n-title="tipGithub" data-i18n-aria="tipGithub" title="Quellcode auf GitHub" aria-label="Quellcode auf GitHub">
+          <svg viewBox="0 0 16 16" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        </a>
       </div>
     </header>
 
@@ -261,6 +279,7 @@
         start: "Start", stop: "Stopp", auto: "Auto", speech: "Stimme", newC: "Neues c",
         tipNewC: "Julia-Modus: neues, zufälliges c am Rand der Mandelbrot-Menge (startet einen neuen Zoom)",
         tipCmap: "Mandelbrot-Menge: Klicken oder Ziehen wählt c für die Julia-Menge",
+        tipGithub: "Quellcode auf GitHub",
         ariaSource: "Audioquelle", ariaLang: "Sprache", ariaTheme: "Farbthema", ariaStage: "Klangvisualisierung",
         tipStart: "Das Audiosignal wird nur lokal im Browser verarbeitet.",
         tipAuto: "Geht der Reihe nach durch alle Animationen (Wechsel alle 20 s auf dem nächsten Bass-Schlag, mit Überblendung) und alle 12 s fließend zum nächsten Farbthema",
@@ -292,6 +311,7 @@
         start: "Start", stop: "Stop", auto: "Auto", speech: "Voice", newC: "New c",
         tipNewC: "Julia mode: new random c on the edge of the Mandelbrot set (starts a new zoom)",
         tipCmap: "Mandelbrot set: click or drag to choose c for the Julia set",
+        tipGithub: "Source code on GitHub",
         ariaSource: "Audio source", ariaLang: "Language", ariaTheme: "Color theme", ariaStage: "Sound visualization",
         tipStart: "The audio signal is processed only locally in your browser.",
         tipAuto: "Steps through all animations in order (a change every 20 s on the next bass beat, with crossfade) and blends to the next color theme every 12 s",
@@ -324,6 +344,7 @@
         start: "Avvia", stop: "Stop", auto: "Auto", speech: "Voce", newC: "Nuovo c",
         tipNewC: "Modalità Julia: nuovo c casuale sul bordo dell'insieme di Mandelbrot (avvia un nuovo zoom)",
         tipCmap: "Insieme di Mandelbrot: clicca o trascina per scegliere c dell'insieme di Julia",
+        tipGithub: "Codice sorgente su GitHub",
         ariaSource: "Sorgente audio", ariaLang: "Lingua", ariaTheme: "Tema colori", ariaStage: "Visualizzazione del suono",
         tipStart: "Il segnale audio viene elaborato solo localmente nel browser.",
         tipAuto: "Passa in ordine attraverso tutte le animazioni (cambio ogni 20 s sul colpo di basso successivo, con dissolvenza) e ogni 12 s sfuma al tema colori successivo",
@@ -3244,6 +3265,8 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
 
     let sourceNode;          // Referenz halten, sonst kann der Knoten vom GC entfernt werden
     let reconnectToken = 0;  // jede Nutzeraktion bricht laufende Wiederverbindungen ab
+    let awaitingGesture = false; // Ton läuft, wartet aber noch auf den ersten Klick (Autoplay-Sperre)
+    let swallowToggle = false;   // der Klick, der den Ton entsperrt hat, soll den Start-Knopf nicht auslösen
 
     // Beobachtet die Audiospur: endet sie unerwartet (Gerätewechsel, AirPods, Ruhezustand),
     // wird ein Mikrofon automatisch neu verbunden; Computer-Ton braucht einen neuen Klick.
@@ -3287,6 +3310,7 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
     }
 
     function stopAudio() {
+      awaitingGesture = false;
       cancelAnimationFrame(animationFrame);
       stopSpeech();
       stream?.getTracks().forEach((track) => track.stop());
@@ -3874,17 +3898,28 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
           setStatus("musicPlaying", true, name);
           return;
         }
-        // Ohne vorherige Interaktion startet der Browser keinen Ton: auf den ersten Klick warten
+        // Ohne vorherige Interaktion startet der Browser keinen Ton: auf den ersten Klick warten.
+        // Solange zeigt der Knopf „Start“, und ein Klick darauf entsperrt nur (sonst würde er sofort stoppen)
         setStatus("clickToPlay", true);
+        awaitingGesture = true;
+        toggleButton.textContent = tr("start");
+        toggleButton.classList.remove("stop");
         const context = audioContext;
-        const unlock = () => {
+        const unlock = (event) => {
           removeEventListener("pointerdown", unlock, true);
           removeEventListener("keydown", unlock, true);
           if (context !== audioContext) return;
+          // War es ein Druck auf den Start-Knopf, darf dessen folgender click nicht stoppen,
+          // auch wenn der Ton bis dahin schon läuft
+          if (toggleButton.contains(event.target)) swallowToggle = true;
           void context.resume().then(() => {
+            if (context !== audioContext) return;
+            awaitingGesture = false;
+            toggleButton.textContent = tr("stop");
+            toggleButton.classList.add("stop");
             setStatus("musicPlaying", true, name);
             speakNext();
-          });
+          }).catch(() => {});
         };
         addEventListener("pointerdown", unlock, true);
         addEventListener("keydown", unlock, true);
@@ -4036,6 +4071,11 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
 
     toggleButton.addEventListener("click", () => {
       reconnectToken += 1;
+      // dieser Klick entsperrt nur den Ton (siehe startSynth)
+      if (awaitingGesture || swallowToggle) {
+        swallowToggle = false;
+        return;
+      }
       if (stream) {
         stopAudio();
       } else {
