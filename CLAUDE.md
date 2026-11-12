@@ -32,6 +32,10 @@ One `requestAnimationFrame` loop, `drawLevels()`, runs while the mic is active:
 **Layout**: one compact header bar (title, mic toggle, status, `<select>` menus for mode and theme, backend/fps label) above `#vis-stage`, which fills the rest of the viewport (`100dvh`, page never scrolls). A `ResizeObserver` on the stage resizes both canvases.
 3. **Visualization**: `drawLevels()` calls `drawVisual(levels)`, which normalizes levels into `visLevels` (0..1; instant attack, 0.25 decay), derives `bass`, `overall`, `dominant` and a `beat` flag (bass jump above its running average), then renders the selected mode. Called with no argument it draws the idle state (mic off, theme/mode switch, resize).
 
+### Embedding (`?embed`)
+
+The 3D museum (`../Museum3d`, same origin on GitHub Pages) loads the page with `?embed` into an iframe and drives it through `window.lichtorgelEmbed` (`null` without the parameter): `muted` (starts true; `setMuted()` ramps `speakerGain`, the node between `musicGain` and `destination` created by `speakerOut()`, and suppresses speech), `paused` (`drawLevels()` keeps scheduling frames but renders nothing), `capture` (`captureEmbedFrame()` at the end of `renderFrame()` composites theme gradient, both 2D layers and the GPU canvas with their opacities, cover-fit, into the fixed 768×403 `embed.canvas`; it must happen in the same task as the GPU draw, or the WebGL/WebGPU buffer is already cleared). Keep that API stable when changing the audio chain or the canvas stack.
+
 ### Modes, themes, backends
 
 - `themes` — palette objects (`bg`, three `colors`, `core`, `glow`). Adding an entry auto-creates its menu option.

@@ -2871,7 +2871,7 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
     }
 
     function speakNext() {
-      if (!speechSupported || !speechOn || !analyser || speechSynthesis.speaking) return;
+      if (!speechSupported || !speechOn || !analyser || speechSynthesis.speaking || embed?.muted) return;
       lastSaying = performance.now();
       if (sayingQueue.length === 0) sayingQueue = shuffled(languages[speechLang].sayings);
       const text = sayingQueue.pop();
@@ -3340,9 +3340,54 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
 
     // Ein Fehler in einem einzelnen Frame darf die Schleife nicht beenden
     const frameErrors = new Set();
+    // ---- Einbettung (?embed), z. B. im 3D-Museum: die Elternseite steuert über window.lichtorgelEmbed ----
+    // muted: Ton (und Stimme) aus, das Bild läuft weiter. paused: kein Rendern (Bild ist nicht zu sehen).
+    // capture: jedes Frame wird mit dem Themenhintergrund in embed.canvas zusammengesetzt, das die
+    // Elternseite als Textur abholt — WebGL/WebGPU-Canvases lassen sich nur im selben Task auslesen.
+    const embed = new URLSearchParams(location.search).has("embed") ? {
+      muted: true, paused: false, capture: false,
+      canvas: Object.assign(document.createElement("canvas"), { width: 768, height: 403 }),
+      setMuted(m) {
+        this.muted = m;
+        if (speakerGain && audioContext) speakerGain.gain.setTargetAtTime(m ? 0 : 1, audioContext.currentTime, 0.05);
+        if (m && speechSupported) { speechSynthesis.cancel(); caption.classList.remove("visible"); }
+      }
+    } : null;
+    window.lichtorgelEmbed = embed;
+    // Lautsprecherausgang hinter musicGain: stummschaltbar, ohne die Analyse zu berühren
+    let speakerGain = null;
+    function speakerOut() {
+      speakerGain = audioContext.createGain();
+      speakerGain.gain.value = embed?.muted ? 0 : 1;
+      speakerGain.connect(audioContext.destination);
+      return speakerGain;
+    }
+    function captureEmbedFrame() {
+      const c = embed.canvas, g = c.getContext("2d"), t = currentTheme();
+      const sw = visStage.clientWidth, sh = visStage.clientHeight;
+      if (!sw || !sh) return;
+      const grad = g.createRadialGradient(c.width / 2, c.height / 2, 0, c.width / 2, c.height / 2, Math.hypot(c.width, c.height) / 2 * 0.75);
+      grad.addColorStop(0, t.bg[0]);
+      grad.addColorStop(1, t.bg[1]);
+      g.globalAlpha = 1;
+      g.fillStyle = grad;
+      g.fillRect(0, 0, c.width, c.height);
+      // Bühne „cover“ ins feste Format einpassen
+      const k = Math.max(c.width / sw, c.height / sh), dw = sw * k, dh = sh * k, dx = (c.width - dw) / 2, dy = (c.height - dh) / 2;
+      for (const el of [...layers.map((l) => l.canvas), gpuCanvas]) {
+        if (el.hidden || !el.width) continue;
+        const o = parseFloat(el.style.opacity || "1");
+        if (o <= 0) continue;
+        g.globalAlpha = o;
+        g.drawImage(el, dx, dy, dw, dh);
+      }
+      g.globalAlpha = 1;
+    }
+
     function drawLevels() {
       if (!analyser || !audioContext) return;
       animationFrame = requestAnimationFrame(drawLevels);
+      if (embed?.paused) return;
       try {
         renderFrame();
       } catch (error) {
@@ -3378,6 +3423,7 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
       }
 
       drawVisual(levels);
+      if (embed?.capture) captureEmbedFrame();
     }
 
     // ---- Synthesizer-Loops: psychedelische Musik, live im Browser erzeugt (keine Dateien, kein Server) ----
@@ -3883,7 +3929,7 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
         analyser.fftSize = 1024;
         analyser.smoothingTimeConstant = 0;
         musicGain = audioContext.createGain();
-        analyser.connect(musicGain).connect(audioContext.destination);
+        analyser.connect(musicGain).connect(speakerOut());
         synth = createSynth(audioContext, synthPresets[id]);
         synth.output.connect(analyser);
         sourceNode = synth.output;
@@ -3990,7 +4036,7 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
         sourceNode.connect(analyser);
         // Lautstärke hinter dem Analyser: Absenken für die Stimme ändert die Visualisierung nicht
         musicGain = audioContext.createGain();
-        analyser.connect(musicGain).connect(audioContext.destination);
+        analyser.connect(musicGain).connect(speakerOut());
         levelOffsetDb = systemOffsetDb;
         stream = new MediaStream(); // leerer Merker „Audio läuft“ für Start/Stopp und Auto-Modus
         await Promise.race([audioContext.resume(), new Promise((resolve) => setTimeout(resolve, 300))]);
