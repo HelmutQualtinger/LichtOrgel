@@ -174,9 +174,36 @@
       pointer-events: none;
     }
     .caption.visible { opacity: 1; }
+    /* Kleine Mandelbrot-Karte im Julia-Modus: zeigt c, Klicken/Ziehen wählt c */
+    .cmap {
+      position: absolute;
+      left: 10px;
+      bottom: 8px;
+      z-index: 3;
+      width: clamp(120px, 17vw, 220px);
+      aspect-ratio: 5 / 4;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 8px;
+      overflow: hidden;
+      background: #000;
+      cursor: crosshair;
+      touch-action: none;
+    }
+    .cmap[hidden] { display: none; }
+    .cmap canvas { display: block; width: 100%; height: 100%; }
+    .cmap-mark {
+      position: absolute;
+      width: 12px;
+      height: 12px;
+      margin: -6px 0 0 -6px;
+      border: 2px solid #fff;
+      outline: 1px solid rgba(0, 0, 0, 0.7);
+      border-radius: 50%;
+      pointer-events: none;
+    }
     button.toggle { background: #232b38; color: #c9d2df; border: 1px solid var(--line); }
     button.toggle[aria-pressed="true"] { background: var(--accent); color: #102019; border-color: transparent; }
-    #visual-gpu[hidden] { display: none; }
+    #visual-gpu[hidden], button[hidden] { display: none; }
 
     @media (max-width: 640px) {
       main { gap: 8px; padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left)); }
@@ -200,6 +227,7 @@
         <span id="status" role="status" aria-live="polite">Nicht aktiv</span>
       </div>
       <div class="pickers">
+        <button id="new-c" class="toggle" type="button" hidden data-i18n="newC" data-i18n-title="tipNewC" title="Julia-Modus: neues, zufälliges c am Rand der Mandelbrot-Menge (startet einen neuen Zoom)">Neues c</button>
         <button id="auto" class="toggle" type="button" aria-pressed="false" data-i18n="auto" data-i18n-title="tipAuto" title="Geht der Reihe nach durch alle Animationen (Wechsel alle 20 s auf dem nächsten Bass-Schlag, mit Überblendung) und alle 12 s fließend zum nächsten Farbthema">Auto</button>
         <button id="speech" class="toggle" type="button" aria-pressed="true" data-i18n="speech" data-i18n-title="tipSpeech" title="Spricht im Auto-Modus bei jedem Farbwechsel langsam einen psychedelischen Spruch (weibliche Stimme, zufällige Reihenfolge)">Stimme</button>
         <select id="lang" class="lang-select" data-i18n-aria="ariaLang" aria-label="Sprache"></select>
@@ -214,6 +242,7 @@
       <canvas id="visual-b" aria-hidden="true"></canvas>
       <canvas id="visual-gpu" aria-hidden="true" hidden></canvas>
       <p class="caption" id="caption" aria-live="polite"></p>
+      <div class="cmap" id="cmap" hidden data-i18n-title="tipCmap" title="Mandelbrot-Menge: Klicken oder Ziehen wählt c für die Julia-Menge"><canvas id="cmap-canvas" aria-hidden="true"></canvas><span class="cmap-mark" id="cmap-mark"></span></div>
     </div>
   </main>
 
@@ -229,7 +258,9 @@
     const uiText = {
       de: {
         source: "Quelle", animation: "Animation", theme: "Thema",
-        start: "Start", stop: "Stopp", auto: "Auto", speech: "Stimme",
+        start: "Start", stop: "Stopp", auto: "Auto", speech: "Stimme", newC: "Neues c",
+        tipNewC: "Julia-Modus: neues, zufälliges c am Rand der Mandelbrot-Menge (startet einen neuen Zoom)",
+        tipCmap: "Mandelbrot-Menge: Klicken oder Ziehen wählt c für die Julia-Menge",
         ariaSource: "Audioquelle", ariaLang: "Sprache", ariaTheme: "Farbthema", ariaStage: "Klangvisualisierung",
         tipStart: "Das Audiosignal wird nur lokal im Browser verarbeitet.",
         tipAuto: "Geht der Reihe nach durch alle Animationen (Wechsel alle 20 s auf dem nächsten Bass-Schlag, mit Überblendung) und alle 12 s fließend zum nächsten Farbthema",
@@ -258,7 +289,9 @@
       },
       en: {
         source: "Source", animation: "Animation", theme: "Theme",
-        start: "Start", stop: "Stop", auto: "Auto", speech: "Voice",
+        start: "Start", stop: "Stop", auto: "Auto", speech: "Voice", newC: "New c",
+        tipNewC: "Julia mode: new random c on the edge of the Mandelbrot set (starts a new zoom)",
+        tipCmap: "Mandelbrot set: click or drag to choose c for the Julia set",
         ariaSource: "Audio source", ariaLang: "Language", ariaTheme: "Color theme", ariaStage: "Sound visualization",
         tipStart: "The audio signal is processed only locally in your browser.",
         tipAuto: "Steps through all animations in order (a change every 20 s on the next bass beat, with crossfade) and blends to the next color theme every 12 s",
@@ -288,7 +321,9 @@
       },
       it: {
         source: "Sorgente", animation: "Animazione", theme: "Tema",
-        start: "Avvia", stop: "Stop", auto: "Auto", speech: "Voce",
+        start: "Avvia", stop: "Stop", auto: "Auto", speech: "Voce", newC: "Nuovo c",
+        tipNewC: "Modalità Julia: nuovo c casuale sul bordo dell'insieme di Mandelbrot (avvia un nuovo zoom)",
+        tipCmap: "Insieme di Mandelbrot: clicca o trascina per scegliere c dell'insieme di Julia",
         ariaSource: "Sorgente audio", ariaLang: "Lingua", ariaTheme: "Tema colori", ariaStage: "Visualizzazione del suono",
         tipStart: "Il segnale audio viene elaborato solo localmente nel browser.",
         tipAuto: "Passa in ordine attraverso tutte le animazioni (cambio ogni 20 s sul colpo di basso successivo, con dissolvenza) e ogni 12 s sfuma al tema colori successivo",
@@ -872,17 +907,24 @@
     // heraus, neues Zufallsziel. float32 ohne Perturbation: ab ca. 1e-4 würde das Bild pixelig, daher 3,5.
     const juliaDepth = 3.5;
     const juliaLevels = 40;
-    const julia = { last: 0, theta: 1.9, rot: 0, hue: 0, kick: 0, pitch: 0.3, vol: 0, push: 0, cx: 0, cy: 0, scale: 2.3, maxIt: 400, colorK: 0.1, colorOff: 0,
-      phase: "in", depth: 0, vel: 0, holdUntil: 0, path: null, tx: 0, ty: 0, centerX: 0, centerY: 0 };
+    const julia = { last: 0, theta: Math.random() * Math.PI * 2, rot: 0, hue: 0, kick: 0, pitch: 0.3, vol: 0, push: 0, cx: 0, cy: 0, scale: 2.3, maxIt: 400, colorK: 0.1, colorOff: 0,
+      phase: "in", depth: 0, vel: 0, holdUntil: 0, path: null, tx: 0, ty: 0, centerX: 0, centerY: 0,
+      manual: null, // manual = [x, y]: von Hand auf der Karte gewähltes c (bleibt fest), sonst wandert c
+      hint: null, clicked: false, panFrom: null, panStart: 0 }; // Klickziel: Vorwärtsorbit des Klickpunkts, Schwenk dorthin
     // Randpunkt der aktuellen Julia-Menge, stetig nachgeführt (path = Rückwärtsorbit des vorigen Frames).
     // Neues Ziel: 16 zufällige Randpunkte, genommen wird der mit der meisten Struktur in der Endansicht
     // (bewertet mit dem c, das in der Endtiefe gilt: dort liegt es viel näher am Kardioidenrand).
     function juliaTarget() {
-      if (!julia.path) {
+      if (julia.hint) {
+        juliaBackward(true, julia.hint);
+        julia.hint = null;
+      } else if (!julia.path) {
         const [cx, cy] = [julia.cx, julia.cy];
         const rEnd = 1 - 0.01 * 10 ** (-juliaDepth * 0.8);
-        julia.cx = (Math.cos(julia.theta) / 2 - Math.cos(2 * julia.theta) / 4) * rEnd;
-        julia.cy = (Math.sin(julia.theta) / 2 - Math.sin(2 * julia.theta) / 4) * rEnd;
+        if (!julia.manual) {
+          julia.cx = (Math.cos(julia.theta) / 2 - Math.cos(2 * julia.theta) / 4) * rEnd;
+          julia.cy = (Math.sin(julia.theta) / 2 - Math.sin(2 * julia.theta) / 4) * rEnd;
+        }
         let best = null;
         let bestScore = -1;
         for (let k = 0; k < 16; k += 1) {
@@ -927,7 +969,9 @@
       const f = inner / 81;
       return sd * (0.3 + f * (1 - f) * 4);
     }
-    function juliaBackward(fresh) {
+    // hint: Vorwärtsorbit eines Klickpunkts P (P, P² + c, …); Stufe k nimmt die Wurzel nächst P_(Stufen−1−k),
+    // so endet die Rückwärtsiteration auf einem Punkt der Julia-Menge nahe am Klick
+    function juliaBackward(fresh, hint = null) {
       if (fresh) julia.path = new Float64Array(juliaLevels * 2);
       let zx = 2;
       let zy = 0;
@@ -941,8 +985,11 @@
         let ry = r * Math.sin(a);
         const px = julia.path[k * 2];
         const py = julia.path[k * 2 + 1];
-        // neues Ziel: zufälliger Zweig; sonst der Zweig, der dem vorigen Frame am nächsten liegt
-        const flip = fresh ? Math.random() < 0.5 : (rx + px) ** 2 + (ry + py) ** 2 < (rx - px) ** 2 + (ry - py) ** 2;
+        // neues Ziel: zufälliger Zweig (bzw. der zum Klick passende); sonst der Zweig, der dem vorigen Frame am nächsten liegt
+        const h = hint && hint[juliaLevels - 1 - k];
+        const flip = fresh
+          ? (h ? (rx + h[0]) ** 2 + (ry + h[1]) ** 2 < (rx - h[0]) ** 2 + (ry - h[1]) ** 2 : Math.random() < 0.5)
+          : (rx + px) ** 2 + (ry + py) ** 2 < (rx - px) ** 2 + (ry - py) ** 2;
         if (flip) { rx = -rx; ry = -ry; }
         julia.path[k * 2] = rx;
         julia.path[k * 2 + 1] = ry;
@@ -952,6 +999,167 @@
       julia.tx = zx;
       julia.ty = zy;
     }
+    // Knopf „Neues c“: zufälliger Ort am Kardioidenrand, Zoom beginnt von vorn mit neuem Ziel
+    // Klick ins Bild (Julia-Modus): Punkt unter dem Zeiger (px, py in Einheiten der kürzeren Bildseite ab Mitte)
+    // wird Zoomziel; vom aktuellen Zoom aus weiter hinein
+    // Nächster Randpunkt zu (x, y): 61 × 61 Raster über ±¼ Bildhöhe; Randpunkte sind äußere Punkte neben einem
+    // inneren oder solche mit sehr langer Fluchtzeit (bei Staub ohne Inneres). Ein Klick ins Schwarze oder
+    // in den glatten Verlauf landet so trotzdem auf der Kante.
+    function juliaSnap(x, y) {
+      const size = 61;
+      const step = (julia.scale * 0.5) / (size - 1);
+      const maxIt = julia.maxIt;
+      const its = new Int32Array(size * size);
+      let top = 0;
+      for (let j = 0; j < size; j += 1) {
+        for (let i = 0; i < size; i += 1) {
+          let zx = x + (i - (size - 1) / 2) * step;
+          let zy = y + (j - (size - 1) / 2) * step;
+          let n = 0;
+          while (n < maxIt && zx * zx + zy * zy < 256) {
+            const nx = zx * zx - zy * zy + julia.cx;
+            zy = 2 * zx * zy + julia.cy;
+            zx = nx;
+            n += 1;
+          }
+          its[j * size + i] = n;
+          if (n < maxIt) top = Math.max(top, n);
+        }
+      }
+      let best = null;
+      let bestD = Infinity;
+      for (let j = 1; j < size - 1; j += 1) {
+        for (let i = 1; i < size - 1; i += 1) {
+          const n = its[j * size + i];
+          if (n >= maxIt) continue;
+          const nearInner = its[j * size + i - 1] >= maxIt || its[j * size + i + 1] >= maxIt || its[(j - 1) * size + i] >= maxIt || its[(j + 1) * size + i] >= maxIt;
+          if (!nearInner && n < top * 0.8) continue;
+          const d = (i - (size - 1) / 2) ** 2 + (j - (size - 1) / 2) ** 2;
+          if (d < bestD) {
+            bestD = d;
+            best = [x + (i - (size - 1) / 2) * step, y + (j - (size - 1) / 2) * step];
+          }
+        }
+      }
+      return best ?? [x, y];
+    }
+    function juliaClick(px, py) {
+      const ca = Math.cos(julia.rot) * julia.scale;
+      const sa = Math.sin(julia.rot) * julia.scale;
+      let [x, y] = juliaSnap(julia.centerX + px * ca - py * sa, julia.centerY + px * sa + py * ca);
+      const hint = [];
+      for (let k = 0; k < juliaLevels; k += 1) {
+        hint.push(Math.hypot(x, y) < 1e6 ? [x, y] : null); // entkommen: ab hier frei wählen
+        [x, y] = [x * x - y * y + julia.cx, 2 * x * y + julia.cy];
+      }
+      julia.hint = hint;
+      julia.clicked = true;
+      julia.panFrom = [julia.centerX, julia.centerY];
+      julia.panStart = performance.now();
+      if (julia.phase !== "in") julia.phase = "in";
+    }
+    function juliaNewC() {
+      julia.manual = null;
+      julia.clicked = false;
+      julia.panFrom = null;
+      julia.theta = Math.random() * Math.PI * 2;
+      julia.depth = 0;
+      julia.vel = 0;
+      julia.phase = "in";
+      julia.path = null;
+    }
+    document.querySelector("#new-c").addEventListener("click", juliaNewC);
+
+    // ---- Mandelbrot-Karte für den Julia-Modus (Ausschnitt −2,1 … 0,7 × −1,12 … 1,12, Imaginärteil nach oben) ----
+    const cmap = document.querySelector("#cmap");
+    const cmapCanvas = document.querySelector("#cmap-canvas");
+    const cmapMark = document.querySelector("#cmap-mark");
+    const cmapView = { x0: -2.1, x1: 0.7, y0: -1.12, y1: 1.12 };
+    let cmapKey = "";
+    let cmapDrawn = 0;
+    // Neu zeichnen nur bei anderer Farbtabelle oder Größe; während einer Themenüberblendung höchstens alle 0,4 s
+    function drawCmap(t) {
+      const ratio = Math.min(devicePixelRatio || 1, 2);
+      const w = Math.round(cmapCanvas.clientWidth * ratio);
+      const h = Math.round(cmapCanvas.clientHeight * ratio);
+      const key = `${t.fractal.join()}|${w}x${h}`;
+      const now = performance.now();
+      if (!w || !h || key === cmapKey || now - cmapDrawn < 400) return;
+      cmapKey = key;
+      cmapDrawn = now;
+      cmapCanvas.width = w;
+      cmapCanvas.height = h;
+      const cctx = cmapCanvas.getContext("2d");
+      const img = cctx.createImageData(w, h);
+      const stops = stopsRgb(t.fractal);
+      const { x0, x1, y0, y1 } = cmapView;
+      let o = 0;
+      for (let j = 0; j < h; j += 1) {
+        const cy = y1 - ((j + 0.5) / h) * (y1 - y0);
+        for (let i = 0; i < w; i += 1) {
+          const cx = x0 + ((i + 0.5) / w) * (x1 - x0);
+          let n = 0;
+          let x = 0;
+          let y = 0;
+          let r2 = 0;
+          // Hauptkardioide und Periode-2-Kreis sofort als Inneres
+          const qx = cx - 0.25;
+          const q = qx * qx + cy * cy;
+          const inside = q * (q + qx) <= 0.25 * cy * cy || (cx + 1) * (cx + 1) + cy * cy <= 0.0625;
+          if (!inside) {
+            while (n < 200 && r2 <= 256) {
+              const nx = x * x - y * y + cx;
+              y = 2 * x * y + cy;
+              x = nx;
+              r2 = x * x + y * y;
+              n += 1;
+            }
+          }
+          if (!inside && r2 > 256) {
+            const mu = n + 1 - Math.log2(Math.max(1, Math.log(r2) / 2));
+            const rgb = heatRgb(stops, Math.log2(mu + 1) * 0.45);
+            const fade = Math.min(1, 0.25 + mu / 12); // weit außen dunkler, damit die Menge hervortritt
+            img.data[o] = rgb[0] * fade;
+            img.data[o + 1] = rgb[1] * fade;
+            img.data[o + 2] = rgb[2] * fade;
+          }
+          img.data[o + 3] = 255;
+          o += 4;
+        }
+      }
+      cctx.putImageData(img, 0, 0);
+    }
+    function updateCmapMark() {
+      const { x0, x1, y0, y1 } = cmapView;
+      cmapMark.style.left = `${((julia.cx - x0) / (x1 - x0)) * 100}%`;
+      cmapMark.style.top = `${((y1 - julia.cy) / (y1 - y0)) * 100}%`;
+    }
+    // Klicken oder Ziehen: c folgt dem Zeiger, der Zoom beginnt dabei jeweils von vorn
+    function pickC(event) {
+      const rect = cmap.getBoundingClientRect();
+      const { x0, x1, y0, y1 } = cmapView;
+      const fx = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+      const fy = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
+      julia.manual = [x0 + fx * (x1 - x0), y1 - fy * (y1 - y0)];
+      [julia.cx, julia.cy] = julia.manual;
+      julia.depth = 0;
+      julia.vel = 0;
+      julia.phase = "in";
+      julia.path = null;
+      julia.clicked = false;
+      julia.panFrom = null;
+      updateCmapMark();
+      if (!analyser) drawIdle();
+    }
+    cmap.addEventListener("pointerdown", (event) => {
+      event.stopPropagation();
+      cmap.setPointerCapture(event.pointerId);
+      pickC(event);
+    });
+    cmap.addEventListener("pointermove", (event) => {
+      if (cmap.hasPointerCapture(event.pointerId)) pickC(event);
+    });
+    cmap.addEventListener("click", (event) => event.stopPropagation());
     function juliaStep(s) {
       const now = performance.now();
       if (now === julia.last) return;
@@ -972,6 +1180,7 @@
       const th = julia.theta;
       julia.cx = (Math.cos(th) / 2 - Math.cos(2 * th) / 4) * r;
       julia.cy = (Math.sin(th) / 2 - Math.sin(2 * th) / 4) * r;
+      if (julia.manual) [julia.cx, julia.cy] = julia.manual;
       // Zoomzyklus wie bei Mandelbrot: Tempo in Zehnerpotenzen pro Sekunde, vor dem Ziel abbremsen
       juliaTarget();
       const want = julia.phase === "in" ? 0.12 * Math.min(1, (juliaDepth - julia.depth) / 1 + 0.1)
@@ -987,12 +1196,23 @@
       } else if (julia.phase === "out" && julia.depth <= 0.001) {
         julia.phase = "in";
         julia.path = null; // nächstes Mal ein neuer, zufälliger Randpunkt
+        julia.clicked = false;
       }
-      // Bildmitte gleitet vom Ursprung (ganze Menge) zum Ziel; ab Tiefe 1,2 exakt auf dem Ziel
-      const e = Math.min(1, julia.depth / 1.2);
+      // Bildmitte gleitet vom Ursprung (ganze Menge) zum Ziel; ab Tiefe 1,2 exakt auf dem Ziel.
+      // Klickziel: sofort ganz auf das Ziel, erreicht über einen weichen Schwenk von 1,5 s
+      const e = julia.clicked ? 1 : Math.min(1, julia.depth / 1.2);
       const w = e * e * (3 - 2 * e);
-      julia.centerX = julia.tx * w;
-      julia.centerY = julia.ty * w;
+      let mx = julia.tx * w;
+      let my = julia.ty * w;
+      if (julia.panFrom) {
+        const k = Math.min(1, (now - julia.panStart) / 1500);
+        const ease = k * k * (3 - 2 * k);
+        mx = julia.panFrom[0] + (mx - julia.panFrom[0]) * ease;
+        my = julia.panFrom[1] + (my - julia.panFrom[1]) * ease;
+        if (k >= 1) julia.panFrom = null;
+      }
+      julia.centerX = mx;
+      julia.centerY = my;
       julia.scale = 2.3 * 10 ** -julia.depth * (1 - s.bass * 0.1);
       julia.maxIt = Math.round(400 + julia.depth * 120);
       julia.colorOff = julia.hue + julia.pitch * 1.5 + julia.vol * 0.9;
@@ -1482,6 +1702,8 @@
       // Julia-Menge (Canvas-2D-Variante mit geringerer Auflösung, Färbung wie Mandelbrot)
       Julia(ctx, w, h, t, s) {
         juliaStep(s);
+        drawCmap(t);
+        updateCmapMark();
         const pw = 120;
         const ph = Math.max(1, Math.round((pw * h) / w));
         if (!fx.img || fx.img.height !== ph) {
@@ -1543,17 +1765,38 @@
         ctx.drawImage(fx.img, 0, 0, w, h);
       },
 
-      // Retro-Landschaft: Spektrum-Verlauf als 3D-Gitter mit Sonne am Horizont
+      // Retro-Landschaft: Spektrum-Verlauf als 3D-Fläche mit Sonne am Horizont. Jede Zeile wird per
+      // Catmull-Rom-Spline verfeinert (terrainSub Stützstellen je Spalte); zwischen benachbarten Zeilen liegen
+      // schattierte Flächen (Farbe nach Höhe, Licht nach Steigung, hinten Dunst), darauf dünne Spline-Linien.
+      // Gezeichnet von hinten nach vorn, damit nahe Hügel die dahinter verdecken.
       Terrain(ctx, w, h, t, s) {
         ctx.clearRect(0, 0, w, h);
         const cols = 41;
+        const sub = 4;
         const rowsMax = 46;
+        const terrainAmp = 0.95; // Höhe der Berge relativ zur Bildhöhe (vorher 0,55)
         const rows = (fx.rows ??= []);
-        rows.unshift(Array.from({ length: cols }, (_, c) => {
+        const raw = Array.from({ length: cols }, (_, c) => {
           const u = Math.abs(c / (cols - 1) - 0.5) * 2; // Bass in der Mitte, Höhen außen
           return levelAt(u) * (0.35 + u * 0.9);
-        }));
+        });
+        // Catmull-Rom in Spaltenrichtung: (cols − 1) · sub + 1 Werte, nicht negativ
+        const fine = [];
+        for (let c = 0; c < cols - 1; c += 1) {
+          const p0 = raw[Math.max(0, c - 1)];
+          const p1 = raw[c];
+          const p2 = raw[c + 1];
+          const p3 = raw[Math.min(cols - 1, c + 2)];
+          for (let k = 0; k < sub; k += 1) {
+            const q = k / sub;
+            const v = 0.5 * (2 * p1 + (p2 - p0) * q + (2 * p0 - 5 * p1 + 4 * p2 - p3) * q * q + (3 * p1 - p0 - 3 * p2 + p3) * q * q * q);
+            fine.push(Math.max(0, v));
+          }
+        }
+        fine.push(raw[cols - 1]);
+        rows.unshift(fine);
         if (rows.length > rowsMax) rows.pop();
+        const n = fine.length;
         const horizon = h * 0.42;
         const sunR = Math.min(w, h) * (0.16 + s.bass * 0.05);
         const sun = ctx.createLinearGradient(0, horizon - sunR, 0, horizon);
@@ -1573,24 +1816,72 @@
         ctx.restore();
         ctx.fillStyle = t.bg[1];
         ctx.fillRect(0, horizon, w, h - horizon);
-        for (let j = rows.length - 1; j >= 0; j -= 1) {
+        // Farbtabelle nach Höhe (aus den Themenfarben, folgt Überblendungen) und Dunstfarbe
+        const base = stopsRgb(t.colors);
+        const lut = Array.from({ length: 32 }, (_, k) => {
+          const seg = Math.min(base.length - 1.0001, (k / 31) * (base.length - 1));
+          const i0 = Math.floor(seg);
+          return base[i0].map((v, m) => v + (base[i0 + 1][m] - v) * (seg - i0));
+        });
+        const fog = stopsRgb([t.bg[1]])[0];
+        const project = (j) => {
           const z = 1 + j * 0.28;
           const baseY = horizon + (h - horizon) / z;
           const spread = (w * 1.6) / z;
-          const pts = rows[j].map((v, c) => [w / 2 + (c / (cols - 1) - 0.5) * spread, baseY - (v * h * 0.55) / z]);
-          ctx.beginPath();
-          pts.forEach(([x, y], n) => (n ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
-          ctx.lineTo(pts[cols - 1][0], h);
-          ctx.lineTo(pts[0][0], h);
-          ctx.closePath();
-          ctx.fillStyle = t.bg[1];
-          ctx.fill();
-          ctx.globalAlpha = Math.max(0, 1 - j / rowsMax);
+          return rows[j].map((v, c) => [w / 2 + (c / (n - 1) - 0.5) * spread, baseY - (v * h * terrainAmp) / z]);
+        };
+        let back = project(rows.length - 1);
+        for (let j = rows.length - 2; j >= 0; j -= 1) {
+          const front = project(j);
+          const vf = rows[j];
+          const vb = rows[j + 1];
+          const haze = Math.min(0.9, (j / rowsMax) * 1.1);
+          // hintere Zeilen sind klein: dort jede zweite Stützstelle (halbiert die Zahl der Flächen)
+          const stepC = j > 12 ? 2 : 1;
+          for (let c0 = 0; c0 < n - 1; c0 += stepC) {
+            const c = c0;
+            const c1 = Math.min(n - 1, c0 + stepC);
+            const height = (vf[c] + vf[c1] + vb[c] + vb[c1]) / 4;
+            // Licht von vorn links: Anstieg nach rechts dunkler, zum Betrachter geneigte Hänge heller
+            const slopeX = ((vf[c1] - vf[c] + vb[c1] - vb[c]) * sub * 0.5) / stepC;
+            const slopeZ = (vf[c] + vf[c1] - vb[c] - vb[c1]) * 0.5;
+            const light = Math.max(0.25, Math.min(1.35, 0.6 - slopeX * 0.9 + slopeZ * 3 + height * 0.5));
+            const col = lut[Math.min(31, Math.round(Math.min(1, height * 1.1) * 31))];
+            const r = (col[0] * light) * (1 - haze) + fog[0] * haze;
+            const g = (col[1] * light) * (1 - haze) + fog[1] * haze;
+            const b = (col[2] * light) * (1 - haze) + fog[2] * haze;
+            ctx.fillStyle = `rgb(${Math.min(255, r) | 0},${Math.min(255, g) | 0},${Math.min(255, b) | 0})`;
+            ctx.beginPath();
+            ctx.moveTo(front[c][0], front[c][1]);
+            ctx.lineTo(front[c1][0], front[c1][1]);
+            ctx.lineTo(back[c1][0], back[c1][1]);
+            ctx.lineTo(back[c][0], back[c][1]);
+            ctx.closePath();
+            ctx.fill();
+          }
+          // dünne Spline-Linie auf der vorderen Kante (Retro-Look), vorn kräftiger
+          ctx.globalAlpha = Math.max(0, 0.55 * (1 - j / rowsMax));
           ctx.strokeStyle = paletteAt(t.colors, 1 - j / rowsMax);
-          ctx.lineWidth = Math.max(0.6, 2.2 / z);
+          ctx.lineWidth = Math.max(0.5, 1.6 / (1 + j * 0.28));
           ctx.beginPath();
-          pts.forEach(([x, y], n) => (n ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+          front.forEach(([x, y], k) => (k ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
           ctx.stroke();
+          ctx.globalAlpha = 1;
+          back = front;
+        }
+        // Vorderkante bis zum unteren Bildrand schließen, damit die Landschaft nicht schwebt
+        if (rows.length > 1) {
+          const edge = ctx.createLinearGradient(0, h * 0.7, 0, h);
+          edge.addColorStop(0, paletteAt(t.colors, 0.15));
+          edge.addColorStop(1, t.bg[1]);
+          ctx.globalAlpha = 0.85;
+          ctx.fillStyle = edge;
+          ctx.beginPath();
+          back.forEach(([x, y], k) => (k ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+          ctx.lineTo(back[n - 1][0], h);
+          ctx.lineTo(back[0][0], h);
+          ctx.closePath();
+          ctx.fill();
           ctx.globalAlpha = 1;
         }
       },
@@ -2288,6 +2579,8 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
       }
       if (juliaOn) {
         juliaStep(s);
+        drawCmap(t);
+        updateCmapMark();
         U.set([julia.cx, julia.cy, julia.scale, julia.rot, julia.maxIt, julia.colorK, julia.colorOff, 0, julia.centerX, julia.centerY, 0, 0], 80);
       }
       // Farbtabelle des Themas (u[12..17]) und ihr Mittel (u[18]): Mandelbrot, Julia und Kaleidoskop
@@ -2661,12 +2954,15 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
     //   2D + 2D: zwei Canvas-Ebenen, Deckkraft gegenläufig
     //   GPU + GPU: ein Renderdurchgang, der neue Effekt per Blend-Konstante darüber
     //   GPU + 2D: GPU-Canvas liegt oben, seine Deckkraft trägt die Überblendung
-    // Im Mandelbrot-Modus wählt ein Klick ins Bild das nächste Zoomziel
+    // Im Mandelbrot- und Julia-Modus wählt ein Klick ins Bild das nächste Zoomziel
     visStage.addEventListener("click", (event) => {
-      if (modeName !== "Mandelbrot" || modeTransition) return;
+      if ((modeName !== "Mandelbrot" && modeName !== "Julia") || modeTransition) return;
       const rect = visStage.getBoundingClientRect();
       const unit = Math.min(rect.width, rect.height);
-      mandelClick((event.clientX - rect.left - rect.width / 2) / unit, (event.clientY - rect.top - rect.height / 2) / unit);
+      const px = (event.clientX - rect.left - rect.width / 2) / unit;
+      const py = (event.clientY - rect.top - rect.height / 2) / unit;
+      if (modeName === "Julia") juliaClick(px, py);
+      else mandelClick(px, py);
       autoNextMode = 0; // Auto-Modus: Effekt läuft ab jetzt wieder volle 20 s
     });
     const layers = [visCanvas, document.querySelector("#visual-b")]
@@ -2688,6 +2984,8 @@ void main() { outColor = shade(vec2(gl_FragCoord.x, u[0].y - gl_FragCoord.y)); }
 
     function selectMode(name) {
       modeName = name;
+      document.querySelector("#new-c").hidden = name !== "Julia";
+      document.querySelector("#cmap").hidden = name !== "Julia";
       markPressed(modeSwitch, name);
       saveSetting("lichtorgel-mode", name);
     }
